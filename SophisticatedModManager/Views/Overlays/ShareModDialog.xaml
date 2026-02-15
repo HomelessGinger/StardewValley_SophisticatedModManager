@@ -1,0 +1,62 @@
+<UserControl x:Class="SophisticatedModManager.Views.Overlays.ShareModDialog"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:SophisticatedModManager.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:MainViewModel}">
+    <Border Background="{StaticResource OverlayDimBrush}"
+            HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+        <Border Background="{StaticResource ContentBgBrush}"
+                BorderBrush="{StaticResource WoodBrownBrush}"
+                BorderThickness="2" CornerRadius="6"
+                Padding="20,16"
+                HorizontalAlignment="Center" VerticalAlignment="Center"
+                MaxWidth="420" MinWidth="320">
+            <StackPanel>
+                <TextBlock Text="{Binding ModToShare.Name, StringFormat='Share &quot;{0}&quot; across profiles'}"
+                           FontSize="15" FontWeight="Bold"
+                           Foreground="{StaticResource DarkEarthBrush}"
+                           TextWrapping="Wrap" Margin="0,0,0,4"/>
+                <TextBlock Text="Select which profiles should share this mod. The mod files will be stored once and linked to each profile."
+                           FontSize="11" Foreground="{StaticResource SubtleTextBrush}"
+                           TextWrapping="Wrap" Margin="0,0,0,12"/>
+                <ItemsControl ItemsSource="{Binding ShareTargetProfiles}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" Margin="0,3">
+                                <CheckBox IsChecked="{Binding IsSelected}"
+                                          Style="{StaticResource StardewCheckBox}"
+                                          VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding ProfileName}"
+                                           FontSize="12" Foreground="{StaticResource DarkEarthBrush}"
+                                           VerticalAlignment="Center" Margin="6,0,0,0"/>
+                                <TextBlock Text="{Binding CurrentVersion, StringFormat='v{0}'}"
+                                           FontSize="10" Foreground="{StaticResource MutedTextBrush}"
+                                           VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                <TextBlock Text="⚠ version mismatch"
+                                           FontSize="10" Foreground="{StaticResource WarningOrangeBrush}"
+                                           VerticalAlignment="Center" Margin="8,0,0,0"
+                                           Visibility="{Binding HasVersionMismatch, Converter={StaticResource BoolToVis}}"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Text="The source profile's mod version will be used for all profiles."
+                           FontSize="10" Foreground="{StaticResource MutedTextBrush}" FontStyle="Italic"
+                           TextWrapping="Wrap" Margin="0,10,0,0"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+                    <Button Content="Share"
+                            Style="{StaticResource StardewButton}"
+                            Command="{Binding ConfirmShareModCommand}"
+                            Padding="12,5" FontSize="12" Margin="0,0,8,0"/>
+                    <Button Content="Cancel"
+                            Style="{StaticResource StardewButton}"
+                            Command="{Binding CancelShareModCommand}"
+                            Padding="12,5" FontSize="12"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </Border>
+</UserControl>

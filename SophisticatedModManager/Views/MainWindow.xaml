@@ -1,0 +1,1408 @@
+<Window x:Class="SophisticatedModManager.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:SophisticatedModManager.ViewModels"
+        xmlns:overlays="clr-namespace:SophisticatedModManager.Views.Overlays"
+        Title="Stardew Valley - Sophisticated Mod Manager"
+        Width="900" Height="620"
+        MinWidth="750" MinHeight="500"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource ContentBgBrush}">
+
+    <Window.Resources>
+        <!-- Shared mod item template used by both Common Mods and Profile Mods -->
+        <DataTemplate x:Key="ModItemTemplate" DataType="{x:Type vm:ModEntryViewModel}">
+            <StackPanel>
+                <!-- Main row -->
+                <Border Margin="0,2" Padding="4,4"
+                        MouseMove="ModItem_MouseMove"
+                        Tag="{Binding}"
+                        Background="Transparent"
+                        AllowDrop="True"
+                        DragOver="CollectionItem_DragOver"
+                        Drop="CollectionItem_Drop">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Expand/collapse button (collections only) -->
+                        <Button Grid.Column="0"
+                                Click="CollectionExpand_Click"
+                                Tag="{Binding}"
+                                Visibility="{Binding IsCollection, Converter={StaticResource BoolToVis}}"
+                                Cursor="Hand" Padding="4,2" Margin="0,0,2,0"
+                                VerticalAlignment="Center">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Background="Transparent" Padding="{TemplateBinding Padding}">
+                                        <TextBlock FontSize="12" FontWeight="Bold" Foreground="{StaticResource SubtleTextBrush}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Text" Value="&#x25B6;"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsExpanded}" Value="True">
+                                                            <Setter Property="Text" Value="&#x25BC;"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Border>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+
+                        <CheckBox Grid.Column="1"
+                                  Style="{StaticResource StardewCheckBox}"
+                                  IsChecked="{Binding IsEnabled}"
+                                  VerticalAlignment="Center"/>
+                        <StackPanel Grid.Column="2" Margin="4,0">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding Name}"
+                                           FontWeight="SemiBold" FontSize="13"
+                                           Foreground="{StaticResource DarkEarthBrush}"
+                                           ToolTip="{Binding Description}"/>
+                                <!-- Collection badge -->
+                                <Border Visibility="{Binding IsCollection, Converter={StaticResource BoolToVis}}"
+                                        Background="{StaticResource WarmGoldBrush}"
+                                        CornerRadius="3" Padding="4,1" Margin="6,0,0,0"
+                                        VerticalAlignment="Center">
+                                    <TextBlock Text="Collection" FontSize="9" FontWeight="Bold"
+                                               Foreground="{StaticResource DarkEarthBrush}"/>
+                                </Border>
+                                <!-- Shared badge -->
+                                <Border Visibility="{Binding IsShared, Converter={StaticResource BoolToVis}}"
+                                        Background="{StaticResource SmapiGreenBrush}"
+                                        CornerRadius="3" Padding="4,1" Margin="6,0,0,0"
+                                        VerticalAlignment="Center">
+                                    <TextBlock Text="Shared" FontSize="9" FontWeight="Bold"
+                                               Foreground="White"/>
+                                </Border>
+                            </StackPanel>
+                            <TextBlock FontSize="11" Foreground="{StaticResource SubtleTextBrush}">
+                                <Run Text="{Binding Author, Mode=OneWay}"/>
+                            </TextBlock>
+                            <TextBlock Text="{Binding Description}"
+                                       FontSize="11" Foreground="{StaticResource MutedTextBrush}"
+                                       TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                                       MaxHeight="34"
+                                       Visibility="{Binding DataContext.ShowModDescriptions,
+                                           RelativeSource={RelativeSource AncestorType=Window},
+                                           Converter={StaticResource BoolToVis}}"/>
+                        </StackPanel>
+                        <TextBlock Grid.Column="3"
+                                   Text="{Binding Version, StringFormat='v{0}'}"
+                                   FontSize="11" Foreground="{StaticResource SubtleTextBrush}"
+                                   VerticalAlignment="Center"/>
+                        <!-- Config edit button -->
+                        <Button Grid.Column="4"
+                                Visibility="{Binding HasConfig, Converter={StaticResource BoolToVis}}"
+                                ToolTip="Edit Config"
+                                Cursor="Hand" Padding="5,2" Margin="4,0,0,0"
+                                VerticalAlignment="Center"
+                                Command="{Binding DataContext.OpenConfigEditorCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                CommandParameter="{Binding}">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="border" Background="Transparent"
+                                            Padding="{TemplateBinding Padding}" CornerRadius="3">
+                                        <TextBlock Text="&#x2699;" FontSize="14" Foreground="{StaticResource SubtleTextBrush}"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="border" Property="Background" Value="#20DDA059"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                        <!-- Endorse mod button -->
+                        <Button Grid.Column="5"
+                                Visibility="{Binding CanEndorse, Converter={StaticResource BoolToVis}}"
+                                Cursor="Hand" Padding="5,2" Margin="4,0,0,0"
+                                VerticalAlignment="Center"
+                                Command="{Binding DataContext.ToggleEndorseModCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                CommandParameter="{Binding}">
+                            <Button.ToolTip>
+                                <TextBlock>
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text" Value="Endorse on Nexus"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsEndorsed}" Value="True">
+                                                    <Setter Property="Text" Value="Remove endorsement"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsEndorsing}" Value="True">
+                                                    <Setter Property="Text" Value="Updating..."/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Button.ToolTip>
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="border" Background="Transparent"
+                                            Padding="{TemplateBinding Padding}" CornerRadius="3">
+                                        <TextBlock FontSize="13">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Text" Value="&#x2661;"/>
+                                                    <Setter Property="Foreground" Value="{StaticResource SubtleTextBrush}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsEndorsed}" Value="True">
+                                                            <Setter Property="Text" Value="&#x2665;"/>
+                                                            <Setter Property="Foreground" Value="{StaticResource ErrorRedBrush}"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsEndorsing}" Value="True">
+                                                            <Setter Property="Text" Value="..."/>
+                                                            <Setter Property="FontSize" Value="10"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="border" Property="Background" Value="#20C0392B"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                        <!-- Update available badge (clickable for changelog) -->
+                        <Button Grid.Column="6"
+                                Visibility="{Binding HasUpdate, Converter={StaticResource BoolToVis}}"
+                                ToolTip="Click to see changelog"
+                                Cursor="Hand" Margin="6,0"
+                                VerticalAlignment="Center"
+                                Command="{Binding DataContext.ViewChangelogCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                CommandParameter="{Binding}">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="border"
+                                            Background="{StaticResource LeafGreenBrush}"
+                                            CornerRadius="3" Padding="6,2">
+                                        <TextBlock FontSize="10" FontWeight="Bold" Foreground="White">
+                                            <Run Text="UPDATE"/>
+                                            <Run Text="{Binding LatestVersion, StringFormat=' v{0}', Mode=OneWay}"/>
+                                        </TextBlock>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="border" Property="Opacity" Value="0.85"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                        <!-- Update button -->
+                        <Button Grid.Column="7"
+                                Visibility="{Binding HasUpdate, Converter={StaticResource BoolToVis}}"
+                                Cursor="Hand" Padding="5,2" Margin="2,0,0,0"
+                                VerticalAlignment="Center"
+                                Command="{Binding DataContext.UpdateModCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                CommandParameter="{Binding}">
+                            <Button.Content>
+                                <TextBlock FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource LeafGreenBrush}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text" Value="Update"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsUpdating}" Value="True">
+                                                    <Setter Property="Text" Value="..."/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Button.Content>
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="border" Background="Transparent"
+                                            Padding="{TemplateBinding Padding}" CornerRadius="3">
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="border" Property="Background" Value="#204A8C1C"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                        <!-- Hamburger menu button -->
+                        <Button Grid.Column="8"
+                                Content="&#x2261;"
+                                FontSize="16" FontWeight="Bold"
+                                Foreground="{StaticResource SubtleTextBrush}"
+                                Cursor="Hand" Padding="6,2" Margin="4,0,0,0"
+                                VerticalAlignment="Center"
+                                Click="HamburgerMenu_Click"
+                                Tag="{Binding}">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="border" Background="Transparent"
+                                            Padding="{TemplateBinding Padding}" CornerRadius="3">
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="border" Property="Background" Value="#20DDA059"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                        <!-- Delete button -->
+                        <Button Grid.Column="9"
+                                FontSize="13" FontWeight="Bold"
+                                Content="X"
+                                Foreground="{StaticResource BarnRedBrush}"
+                                Cursor="Hand" Padding="6,2" Margin="2,0,0,0"
+                                VerticalAlignment="Center"
+                                Command="{Binding DataContext.RequestDeleteModCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                CommandParameter="{Binding}">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="border" Background="Transparent"
+                                            Padding="{TemplateBinding Padding}" CornerRadius="3">
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="border" Property="Background" Value="#20B52121"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                    </Grid>
+                </Border>
+
+                <!-- Sub-mods list (collections only, when expanded) -->
+                <ItemsControl Margin="28,0,0,4" ItemsSource="{Binding SubMods}">
+                    <ItemsControl.Style>
+                        <Style TargetType="ItemsControl">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding IsCollection}" Value="True"/>
+                                        <Condition Binding="{Binding IsExpanded}" Value="True"/>
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </MultiDataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ItemsControl.Style>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:ModEntryViewModel}">
+                            <Border Margin="0,1" Padding="4,3" Background="Transparent"
+                                    MouseMove="ModItem_MouseMove"
+                                    Tag="{Binding}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <CheckBox Grid.Column="0"
+                                              Style="{StaticResource StardewCheckBox}"
+                                              IsChecked="{Binding IsEnabled}"
+                                              VerticalAlignment="Center"/>
+                                    <StackPanel Grid.Column="1" Margin="4,0">
+                                        <TextBlock Text="{Binding Name}"
+                                                   FontWeight="Normal" FontSize="12"
+                                                   Foreground="{StaticResource DarkEarthBrush}"
+                                                   ToolTip="{Binding Description}"/>
+                                        <TextBlock FontSize="10" Foreground="{StaticResource SubtleTextBrush}">
+                                            <Run Text="{Binding Author, Mode=OneWay}"/>
+                                        </TextBlock>
+                                        <TextBlock Text="{Binding Description}"
+                                                   FontSize="10" Foreground="{StaticResource MutedTextBrush}"
+                                                   TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                                                   MaxHeight="30"
+                                                   Visibility="{Binding DataContext.ShowModDescriptions,
+                                                       RelativeSource={RelativeSource AncestorType=Window},
+                                                       Converter={StaticResource BoolToVis}}"/>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2"
+                                               Text="{Binding Version, StringFormat='v{0}'}"
+                                               FontSize="10" Foreground="{StaticResource SubtleTextBrush}"
+                                               VerticalAlignment="Center"/>
+                                    <!-- Config edit button -->
+                                    <Button Grid.Column="3"
+                                            Visibility="{Binding HasConfig, Converter={StaticResource BoolToVis}}"
+                                            ToolTip="Edit Config"
+                                            Cursor="Hand" Padding="4,2" Margin="4,0,0,0"
+                                            VerticalAlignment="Center"
+                                            Command="{Binding DataContext.OpenConfigEditorCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                            CommandParameter="{Binding}">
+                                        <Button.Template>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border x:Name="border" Background="Transparent"
+                                                        Padding="{TemplateBinding Padding}" CornerRadius="3">
+                                                    <TextBlock Text="&#x2699;" FontSize="12" Foreground="{StaticResource SubtleTextBrush}"/>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="border" Property="Background" Value="#20DDA059"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Button.Template>
+                                    </Button>
+                                    <!-- Endorse mod button -->
+                                    <Button Grid.Column="4"
+                                            Visibility="{Binding CanEndorse, Converter={StaticResource BoolToVis}}"
+                                            Cursor="Hand" Padding="4,2" Margin="4,0,0,0"
+                                            VerticalAlignment="Center"
+                                            Command="{Binding DataContext.ToggleEndorseModCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                            CommandParameter="{Binding}">
+                                        <Button.ToolTip>
+                                            <TextBlock>
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Text" Value="Endorse on Nexus"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsEndorsed}" Value="True">
+                                                                <Setter Property="Text" Value="Remove endorsement"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding IsEndorsing}" Value="True">
+                                                                <Setter Property="Text" Value="Updating..."/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Button.ToolTip>
+                                        <Button.Template>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border x:Name="border" Background="Transparent"
+                                                        Padding="{TemplateBinding Padding}" CornerRadius="3">
+                                                    <TextBlock FontSize="12">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Text" Value="&#x2661;"/>
+                                                                <Setter Property="Foreground" Value="{StaticResource SubtleTextBrush}"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsEndorsed}" Value="True">
+                                                                        <Setter Property="Text" Value="&#x2665;"/>
+                                                                        <Setter Property="Foreground" Value="{StaticResource ErrorRedBrush}"/>
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding IsEndorsing}" Value="True">
+                                                                        <Setter Property="Text" Value="..."/>
+                                                                        <Setter Property="FontSize" Value="9"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="border" Property="Background" Value="#20C0392B"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Button.Template>
+                                    </Button>
+                                    <!-- Hamburger menu button -->
+                                    <Button Grid.Column="5"
+                                            Content="&#x2261;"
+                                            FontSize="14" FontWeight="Bold"
+                                            Foreground="{StaticResource SubtleTextBrush}"
+                                            Cursor="Hand" Padding="5,2" Margin="4,0,0,0"
+                                            VerticalAlignment="Center"
+                                            Click="HamburgerMenu_Click"
+                                            Tag="{Binding}">
+                                        <Button.Template>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border x:Name="border" Background="Transparent"
+                                                        Padding="{TemplateBinding Padding}" CornerRadius="3">
+                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="border" Property="Background" Value="#20DDA059"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Button.Template>
+                                    </Button>
+                                    <!-- Delete button -->
+                                    <Button Grid.Column="6"
+                                            FontSize="12" FontWeight="Bold"
+                                            Content="X"
+                                            Foreground="{StaticResource BarnRedBrush}"
+                                            Cursor="Hand" Padding="5,2" Margin="4,0,0,0"
+                                            VerticalAlignment="Center"
+                                            Command="{Binding DataContext.RequestDeleteModCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                            CommandParameter="{Binding}">
+                                        <Button.Template>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border x:Name="border" Background="Transparent"
+                                                        Padding="{TemplateBinding Padding}" CornerRadius="3">
+                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="border" Property="Background" Value="#20B52121"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Button.Template>
+                                    </Button>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </DataTemplate>
+    </Window.Resources>
+
+    <!-- ==================== MAIN GRID ==================== -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ==================== TITLE BAR ==================== -->
+        <Border Grid.Row="0" Background="{StaticResource WoodBrownBrush}" Padding="16,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="Sophisticated Mod Manager"
+                               FontSize="20" FontWeight="Bold"
+                               Foreground="{StaticResource ParchmentCreamBrush}"/>
+                    <TextBlock Text="  for Stardew Valley"
+                               FontSize="14" FontWeight="Normal"
+                               Foreground="{StaticResource WarmGoldBrush}"
+                               VerticalAlignment="Bottom" Margin="0,0,0,1"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="Browse Nexus"
+                            Style="{StaticResource StardewButton}"
+                            Command="{Binding BrowseNexusCommand}"
+                            Visibility="{Binding IsNexusConfigured, Converter={StaticResource BoolToVis}}"
+                            Padding="10,4" FontSize="11" Margin="0,0,8,0"/>
+                    <Button Style="{StaticResource StardewButton}"
+                            Command="{Binding CheckForUpdatesCommand}"
+                            Visibility="{Binding IsNexusConfigured, Converter={StaticResource BoolToVis}}"
+                            Padding="10,4" FontSize="11" Margin="0,0,8,0">
+                        <Button.Content>
+                            <TextBlock>
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value="Check Updates"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsCheckingUpdates}" Value="True">
+                                                <Setter Property="Text" Value="Checking..."/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Button.Content>
+                    </Button>
+                    <Button Content="Find Duplicates"
+                            Style="{StaticResource StardewButton}"
+                            Command="{Binding DetectDuplicatesCommand}"
+                            Padding="10,4" FontSize="11" Margin="0,0,8,0"/>
+                    <Button Content="Load Backup"
+                            Style="{StaticResource StardewButton}"
+                            Command="{Binding OpenBackupsCommand}"
+                            Padding="10,4" FontSize="11" Margin="0,0,8,0"/>
+                    <Button Content="Refresh"
+                            Style="{StaticResource StardewButton}"
+                            Command="{Binding FullRefreshCommand}"
+                            Padding="10,4" FontSize="11" Margin="0,0,8,0"/>
+                    <Button Content="Settings"
+                            Style="{StaticResource StardewButton}"
+                            Command="{Binding OpenSettingsCommand}"
+                            Padding="10,4" FontSize="11"/>
+                    <Button Content="Open Mods"
+                            Style="{StaticResource StardewButton}"
+                            Command="{Binding OpenModsFolderCommand}"
+                            Padding="10,4" FontSize="11" Margin="8,0,0,0"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ==================== MAIN CONTENT ==================== -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="200"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- ==================== SIDEBAR ==================== -->
+            <Border Grid.Column="0" Background="{StaticResource SidebarBgBrush}">
+                <DockPanel>
+                    <!-- Sidebar Header -->
+                    <TextBlock DockPanel.Dock="Top"
+                               Text="Profiles"
+                               FontSize="15" FontWeight="SemiBold"
+                               Foreground="{StaticResource WarmGoldBrush}"
+                               Margin="16,14,16,8"/>
+
+                    <!-- Sidebar Bottom: Buttons + Inline Create -->
+                    <StackPanel DockPanel.Dock="Bottom" Margin="10,0,10,10">
+                        <!-- Inline Create Profile -->
+                        <Border Visibility="{Binding IsCreatingProfile, Converter={StaticResource BoolToVis}}"
+                                Background="{StaticResource SidebarBgBrush}"
+                                Margin="0,4" Padding="0,4">
+                            <StackPanel>
+                                <TextBox x:Name="NewProfileNameBox"
+                                         Style="{StaticResource StardewTextBox}"
+                                         Text="{Binding NewProfileName, UpdateSourceTrigger=PropertyChanged}"
+                                         FontSize="12" Margin="0,0,0,6"
+                                         KeyDown="NewProfileNameBox_KeyDown"/>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <Button Content="Create"
+                                            Style="{StaticResource StardewButton}"
+                                            Command="{Binding ConfirmCreateProfileCommand}"
+                                            Padding="8,3" FontSize="11" Margin="0,0,4,0"/>
+                                    <Button Content="Cancel"
+                                            Style="{StaticResource StardewButton}"
+                                            Command="{Binding CancelCreateProfileCommand}"
+                                            Padding="8,3" FontSize="11"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Inline Delete Confirmation -->
+                        <Border Visibility="{Binding IsConfirmingDelete, Converter={StaticResource BoolToVis}}"
+                                Background="{StaticResource DeleteBgBrush}" CornerRadius="4"
+                                Margin="0,4" Padding="8,6">
+                            <StackPanel>
+                                <TextBlock Text="{Binding SelectedProfile.Name, StringFormat='Delete &quot;{0}&quot;?'}"
+                                           Foreground="{StaticResource ParchmentCreamBrush}"
+                                           FontSize="12" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <Button Content="Yes, Delete"
+                                            Style="{StaticResource DeleteButton}"
+                                            Command="{Binding ConfirmDeleteProfileCommand}"
+                                            Padding="8,3" FontSize="11" Margin="0,0,4,0"/>
+                                    <Button Content="Cancel"
+                                            Style="{StaticResource StardewButton}"
+                                            Command="{Binding CancelDeleteProfileCommand}"
+                                            Padding="8,3" FontSize="11"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Inline Rename Profile -->
+                        <Border Visibility="{Binding IsRenamingProfile, Converter={StaticResource BoolToVis}}"
+                                Background="{StaticResource SidebarBgBrush}"
+                                Margin="0,4" Padding="0,4">
+                            <StackPanel>
+                                <TextBlock Text="Rename profile:"
+                                           Foreground="{StaticResource ParchmentCreamBrush}"
+                                           FontSize="11" Margin="0,0,0,4"/>
+                                <TextBox x:Name="RenameProfileNameBox"
+                                         Style="{StaticResource StardewTextBox}"
+                                         Text="{Binding RenameProfileNewName, UpdateSourceTrigger=PropertyChanged}"
+                                         FontSize="12" Margin="0,0,0,6"
+                                         KeyDown="RenameProfileNameBox_KeyDown"/>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <Button Content="Rename"
+                                            Style="{StaticResource StardewButton}"
+                                            Command="{Binding ConfirmRenameProfileCommand}"
+                                            Padding="8,3" FontSize="11" Margin="0,0,4,0"/>
+                                    <Button Content="Cancel"
+                                            Style="{StaticResource StardewButton}"
+                                            Command="{Binding CancelRenameProfileCommand}"
+                                            Padding="8,3" FontSize="11"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <Button Content="+ New Profile"
+                                Style="{StaticResource StardewButton}"
+                                Command="{Binding CreateProfileCommand}"
+                                Visibility="{Binding IsCreatingProfile, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"
+                                Margin="0,4" FontSize="12"/>
+                        <Grid Margin="0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="4"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Button Grid.Column="0"
+                                    Content="Rename"
+                                    Style="{StaticResource StardewButton}"
+                                    Command="{Binding RenameProfileCommand}"
+                                    Visibility="{Binding IsRenamingProfile, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"
+                                    FontSize="12"/>
+                            <Button Grid.Column="2"
+                                    Content="Delete"
+                                    Style="{StaticResource DeleteButton}"
+                                    Command="{Binding DeleteProfileCommand}"
+                                    Visibility="{Binding IsConfirmingDelete, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"
+                                    FontSize="12"/>
+                        </Grid>
+                        <Button Content="Convert to Collection"
+                                Style="{StaticResource StardewButton}"
+                                Command="{Binding ConvertProfileToCollectionCommand}"
+                                Margin="0,4" FontSize="12"/>
+                    </StackPanel>
+
+                    <!-- Profile List -->
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding Profiles}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:ProfileItem}">
+                                    <Button Style="{StaticResource SidebarProfileButton}"
+                                            Command="{Binding DataContext.RefreshModsCommand,
+                                                RelativeSource={RelativeSource AncestorType=Window}}"
+                                            Click="ProfileButton_Click"
+                                            Tag="{Binding}"
+                                            AllowDrop="True"
+                                            DragOver="SidebarProfile_DragOver"
+                                            Drop="SidebarProfile_Drop">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding Name}" FontSize="14">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="{StaticResource SidebarTextBrush}"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                                <Setter Property="Foreground" Value="{StaticResource ActiveProfileBrush}"/>
+                                                                <Setter Property="FontWeight" Value="Bold"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+
+            <!-- ==================== CONTENT AREA ==================== -->
+            <Grid Grid.Column="1">
+                <!-- Profile View (default) -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="20,16"
+                              Visibility="{Binding IsSettingsVisible, Converter={StaticResource BoolToVis},
+                                  ConverterParameter=Invert}">
+
+                    <StackPanel Margin="20,16">
+                        <!-- No profile selected message -->
+                        <TextBlock FontSize="18" FontWeight="Bold"
+                                   Foreground="{StaticResource DarkEarthBrush}"
+                                   Margin="0,0,0,16">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SelectedProfile}" Value="{x:Null}">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                            <Setter Property="Text" Value="No profiles yet. Create one to get started!"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+
+                        <!-- Search bar (visible when profile selected) -->
+                        <Grid Margin="0,0,0,4"
+                              Visibility="{Binding SelectedProfile, Converter={StaticResource BoolToVis}}">
+                            <TextBox x:Name="ModSearchBox"
+                                     Style="{StaticResource StardewTextBox}"
+                                     Text="{Binding ModSearchText, UpdateSourceTrigger=PropertyChanged}"
+                                     FontSize="13"/>
+                            <TextBlock Text="Search mods..."
+                                       FontSize="13" FontStyle="Italic"
+                                       Foreground="{StaticResource MutedTextBrush}"
+                                       VerticalAlignment="Center" Margin="8,0,0,0"
+                                       IsHitTestVisible="False">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Text, ElementName=ModSearchBox}" Value="">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
+                        <!-- Expand/Collapse All Collections -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8"
+                                    Visibility="{Binding HasCollections, Converter={StaticResource BoolToVis}}">
+                            <Button Content="Expand All" Command="{Binding ExpandAllCollectionsCommand}"
+                                    Style="{StaticResource StardewButton}" FontSize="11"
+                                    Padding="8,2" Margin="0,0,6,0"/>
+                            <Button Content="Collapse All" Command="{Binding CollapseAllCollectionsCommand}"
+                                    Style="{StaticResource StardewButton}" FontSize="11"
+                                    Padding="8,2"/>
+                        </StackPanel>
+
+                        <!-- SWAPPABLE MOD SECTIONS -->
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <!-- COMMON MODS SECTION -->
+                            <Border Background="{StaticResource CardBgBrush}"
+                                    BorderBrush="{StaticResource CardBorderBrush}"
+                                    BorderThickness="1" CornerRadius="4"
+                                    Padding="14,10" Margin="0,0,0,12"
+                                    AllowDrop="True"
+                                    DragOver="ModSection_DragOver"
+                                    Drop="CommonModsSection_Drop">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Grid.Row" Value="0"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsActiveProfileVanilla}" Value="True">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding CommonModsOnTop}" Value="False">
+                                                <Setter Property="Grid.Row" Value="1"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <StackPanel>
+                                    <Grid Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="Common Mods (Shared Across All Profiles)"
+                                                   FontSize="14" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource WoodBrownBrush}"
+                                                   VerticalAlignment="Center"/>
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                            <Button Command="{Binding SwapModSectionsCommand}"
+                                                    Style="{StaticResource StardewButton}"
+                                                    Padding="6,2" FontSize="11" Margin="0,0,6,0">
+                                                <Button.ToolTip>
+                                                    <TextBlock>
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Text" Value="Move section down"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding CommonModsOnTop}" Value="False">
+                                                                        <Setter Property="Text" Value="Move section up"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                </Button.ToolTip>
+                                                <Button.Content>
+                                                    <TextBlock FontFamily="Segoe UI Symbol" FontSize="11">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Text" Value="&#x25BC;"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding CommonModsOnTop}" Value="False">
+                                                                        <Setter Property="Text" Value="&#x25B2;"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                </Button.Content>
+                                            </Button>
+                                            <Button Content="+ Collection"
+                                                    Style="{StaticResource StardewButton}"
+                                                    Command="{Binding CreateCollectionCommand}"
+                                                    CommandParameter="Common"
+                                                    Padding="10,4" FontSize="11" Margin="0,0,6,0"/>
+                                            <Button Content="+ Add Mod(s)"
+                                                    Style="{StaticResource StardewButton}"
+                                                    Command="{Binding AddCommonModsCommand}"
+                                                    Padding="10,4" FontSize="11"/>
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <!-- Empty state -->
+                                    <TextBlock Foreground="{StaticResource SubtleTextBrush}" FontSize="12" FontStyle="Italic"
+                                               Margin="0,4">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding CommonMods.Count}" Value="0">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                        <Setter Property="Text"
+                                                                Value="No common mods yet. Drag mods here or click Add Mod(s)."/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+
+                                    <ItemsControl ItemsSource="{Binding CommonMods}"
+                                                  ItemTemplate="{StaticResource ModItemTemplate}"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- PROFILE MODS SECTION -->
+                            <Border Background="{StaticResource CardBgBrush}"
+                                    BorderBrush="{StaticResource CardBorderBrush}"
+                                    BorderThickness="1" CornerRadius="4"
+                                    Padding="14,10" Margin="0,0,0,12"
+                                    AllowDrop="True"
+                                    DragOver="ModSection_DragOver"
+                                    Drop="ProfileModsSection_Drop">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Grid.Row" Value="1"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding CommonModsOnTop}" Value="False">
+                                                <Setter Property="Grid.Row" Value="0"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <StackPanel>
+                                    <Grid Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="Profile Mods"
+                                                   FontSize="14" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource WoodBrownBrush}"
+                                                   VerticalAlignment="Center"/>
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                            <Button Command="{Binding SwapModSectionsCommand}"
+                                                    Style="{StaticResource StardewButton}"
+                                                    Padding="6,2" FontSize="11" Margin="0,0,6,0">
+                                                <Button.ToolTip>
+                                                    <TextBlock>
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Text" Value="Move section up"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding CommonModsOnTop}" Value="False">
+                                                                        <Setter Property="Text" Value="Move section down"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                </Button.ToolTip>
+                                                <Button.Content>
+                                                    <TextBlock FontFamily="Segoe UI Symbol" FontSize="11">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Text" Value="&#x25B2;"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding CommonModsOnTop}" Value="False">
+                                                                        <Setter Property="Text" Value="&#x25BC;"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                </Button.Content>
+                                            </Button>
+                                            <Button Content="+ Collection"
+                                                    Style="{StaticResource StardewButton}"
+                                                    Command="{Binding CreateCollectionCommand}"
+                                                    CommandParameter="Profile"
+                                                    Padding="10,4" FontSize="11" Margin="0,0,6,0"/>
+                                            <Button Content="+ Add Mod(s)"
+                                                    Style="{StaticResource StardewButton}"
+                                                    Command="{Binding AddModsCommand}"
+                                                    Padding="10,4" FontSize="11"/>
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <!-- Empty state -->
+                                    <TextBlock Foreground="{StaticResource SubtleTextBrush}" FontSize="12" FontStyle="Italic"
+                                               Margin="0,4">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ProfileMods.Count}" Value="0">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                        <Setter Property="Text"
+                                                                Value="No mods in this profile yet. Add mod folders to the profile's Mods directory."/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+
+                                    <ItemsControl ItemsSource="{Binding ProfileMods}"
+                                                  ItemTemplate="{StaticResource ModItemTemplate}"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- Folder Selection Overlay (for Add Mods) -->
+                <Border Background="{StaticResource ContentBgBrush}"
+                        Visibility="{Binding IsSelectingModFolders, Converter={StaticResource BoolToVis}}"
+                        Padding="30,20">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top"
+                                   Text="{Binding ExtractedArchiveName, StringFormat='Select folders to add from: {0}'}"
+                                   FontSize="16" FontWeight="Bold"
+                                   Foreground="{StaticResource WoodBrownBrush}"
+                                   Margin="0,0,0,6"/>
+                        <TextBlock DockPanel.Dock="Top"
+                                   Text="This archive contains multiple folders. Typically this could mean multiple mods in one install (such as content patcher marked with [CP] or other mod combinations), or optional mods. Select the folder(s) you want to install."
+                                   FontSize="12" Foreground="{StaticResource SubtleTextBrush}"
+                                   TextWrapping="Wrap" Margin="0,0,0,16"/>
+
+                        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,12,0,0">
+                            <Button Content="Add Selected"
+                                    Style="{StaticResource StardewButton}"
+                                    Command="{Binding ConfirmAddSelectedFoldersCommand}"
+                                    Margin="0,0,8,0"/>
+                            <Button Content="Cancel"
+                                    Style="{StaticResource StardewButton}"
+                                    Command="{Binding CancelAddModsCommand}"/>
+                        </StackPanel>
+
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <ItemsControl ItemsSource="{Binding ExtractedFolders}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:ExtractedFolderItem}">
+                                        <Border Background="{StaticResource CardBgBrush}"
+                                                BorderBrush="{StaticResource CardBorderBrush}"
+                                                BorderThickness="1" CornerRadius="4"
+                                                Padding="10,8" Margin="0,0,0,6">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <CheckBox Grid.Column="0"
+                                                          Style="{StaticResource StardewCheckBox}"
+                                                          IsChecked="{Binding IsSelected}"
+                                                          VerticalAlignment="Center"/>
+                                                <StackPanel Grid.Column="1" Margin="4,0">
+                                                    <TextBlock Text="{Binding Name}"
+                                                               FontWeight="SemiBold" FontSize="13"
+                                                               Foreground="{StaticResource DarkEarthBrush}"/>
+                                                    <TextBlock Text="{Binding RelativePath}"
+                                                               FontSize="11" Foreground="{StaticResource SubtleTextBrush}"/>
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="2"
+                                                           VerticalAlignment="Center" FontSize="11"
+                                                           Margin="8,0,0,0">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Text" Value="No manifest"/>
+                                                            <Setter Property="Foreground" Value="{StaticResource BarnRedBrush}"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding HasManifest}" Value="True">
+                                                                    <Setter Property="Text" Value="SMAPI Mod"/>
+                                                                    <Setter Property="Foreground" Value="{StaticResource LeafGreenBrush}"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
+
+                <!-- ==================== OVERLAYS ==================== -->
+                <!-- Settings View (overlay) -->
+                <overlays:SettingsOverlay
+                    Visibility="{Binding IsSettingsVisible, Converter={StaticResource BoolToVis}}"/>
+
+                <!-- Save Backups Overlay -->
+                <overlays:BackupsOverlay
+                    Visibility="{Binding IsViewingBackups, Converter={StaticResource BoolToVis}}"/>
+
+                <!-- Nexus Browse Overlay -->
+                <overlays:NexusBrowseOverlay
+                    Visibility="{Binding IsNexusBrowsing, Converter={StaticResource BoolToVis}}"/>
+
+                <!-- Mod Detail Overlay -->
+                <overlays:ModDetailOverlay
+                    Visibility="{Binding IsViewingModDetail, Converter={StaticResource BoolToVis}}"/>
+
+                <!-- Install Target Picker Overlay -->
+                <Border Visibility="{Binding IsChoosingInstallTarget, Converter={StaticResource BoolToVis}}"
+                        Background="{StaticResource OverlayDimBrush}"
+                        HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                    <Border Background="{StaticResource ContentBgBrush}"
+                            BorderBrush="{StaticResource WoodBrownBrush}"
+                            BorderThickness="2" CornerRadius="6"
+                            Padding="20,16"
+                            HorizontalAlignment="Center" VerticalAlignment="Center"
+                            MinWidth="300" MaxWidth="400">
+                        <StackPanel>
+                            <TextBlock Text="Choose Install Location"
+                                       FontSize="16" FontWeight="Bold"
+                                       Foreground="{StaticResource WoodBrownBrush}"
+                                       Margin="0,0,0,12"/>
+                            <TextBlock Text="Select where to install this mod:"
+                                       FontSize="12" Foreground="{StaticResource SubtleTextBrush}"
+                                       Margin="0,0,0,10"/>
+                            <ListBox ItemsSource="{Binding InstallTargetOptions}"
+                                     SelectedItem="{Binding SelectedInstallTarget}"
+                                     FontSize="13" MaxHeight="250"
+                                     BorderThickness="1"
+                                     BorderBrush="{StaticResource CardBorderBrush}"
+                                     Background="{StaticResource CardBgBrush}">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:InstallTargetOption}">
+                                        <TextBlock Text="{Binding Label}"
+                                                   Foreground="{StaticResource DarkEarthBrush}"
+                                                   Padding="4,4" FontSize="13"/>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+                                <Button Content="Install Here"
+                                        Style="{StaticResource StardewButton}"
+                                        Command="{Binding ConfirmInstallTargetCommand}"
+                                        Padding="10,5" FontSize="12" Margin="0,0,8,0"/>
+                                <Button Content="Cancel"
+                                        Style="{StaticResource StardewButton}"
+                                        Command="{Binding CancelInstallTargetCommand}"
+                                        Padding="10,5" FontSize="12"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </Border>
+
+                <!-- Create Collection Overlay -->
+                <Border Visibility="{Binding IsCreatingCollection, Converter={StaticResource BoolToVis}}"
+                        Background="{StaticResource OverlayDimBrush}"
+                        HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                    <Border Background="{StaticResource ContentBgBrush}"
+                            BorderBrush="{StaticResource WoodBrownBrush}"
+                            BorderThickness="2" CornerRadius="6"
+                            Padding="20,16"
+                            HorizontalAlignment="Center" VerticalAlignment="Center"
+                            MinWidth="320" MaxWidth="400">
+                        <StackPanel>
+                            <TextBlock Text="Create Collection"
+                                       FontSize="16" FontWeight="Bold"
+                                       Foreground="{StaticResource WoodBrownBrush}"
+                                       Margin="0,0,0,12"/>
+                            <TextBlock Text="Collection Name" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{StaticResource DarkEarthBrush}" Margin="0,0,0,4"/>
+                            <TextBox Style="{StaticResource StardewTextBox}"
+                                     Text="{Binding NewCollectionName, UpdateSourceTrigger=PropertyChanged}"
+                                     FontSize="12" Margin="0,0,0,16"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <Button Content="Create"
+                                        Style="{StaticResource StardewButton}"
+                                        Command="{Binding ConfirmCreateCollectionCommand}"
+                                        Padding="10,5" FontSize="12" Margin="0,0,8,0"/>
+                                <Button Content="Cancel"
+                                        Style="{StaticResource StardewButton}"
+                                        Command="{Binding CancelCreateCollectionCommand}"
+                                        Padding="10,5" FontSize="12"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </Border>
+
+                <!-- Convert Collection to Profile Overlay -->
+                <Border Visibility="{Binding IsConvertingCollectionToProfile, Converter={StaticResource BoolToVis}}"
+                        Background="{StaticResource OverlayDimBrush}"
+                        HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                    <Border Background="{StaticResource ContentBgBrush}"
+                            BorderBrush="{StaticResource WoodBrownBrush}"
+                            BorderThickness="2" CornerRadius="6"
+                            Padding="20,16"
+                            HorizontalAlignment="Center" VerticalAlignment="Center"
+                            MinWidth="320" MaxWidth="400">
+                        <StackPanel>
+                            <TextBlock Text="Convert Collection to Profile"
+                                       FontSize="16" FontWeight="Bold"
+                                       Foreground="{StaticResource WoodBrownBrush}"
+                                       Margin="0,0,0,12"/>
+                            <TextBlock Text="New Profile Name" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{StaticResource DarkEarthBrush}" Margin="0,0,0,4"/>
+                            <TextBox Style="{StaticResource StardewTextBox}"
+                                     Text="{Binding ConvertCollectionProfileName, UpdateSourceTrigger=PropertyChanged}"
+                                     FontSize="12" Margin="0,0,0,8"/>
+                            <TextBlock Text="All mods in the collection will be moved into the new profile. The collection will be removed."
+                                       FontSize="11" Foreground="{StaticResource SubtleTextBrush}" TextWrapping="Wrap" Margin="0,0,0,16"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <Button Content="Convert"
+                                        Style="{StaticResource StardewButton}"
+                                        Command="{Binding ConfirmConvertCollectionToProfileCommand}"
+                                        Padding="10,5" FontSize="12" Margin="0,0,8,0"/>
+                                <Button Content="Cancel"
+                                        Style="{StaticResource StardewButton}"
+                                        Command="{Binding CancelConvertCollectionToProfileCommand}"
+                                        Padding="10,5" FontSize="12"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </Border>
+
+                <!-- Convert Profile to Collection Overlay -->
+                <Border Visibility="{Binding IsConvertingProfileToCollection, Converter={StaticResource BoolToVis}}"
+                        Background="{StaticResource OverlayDimBrush}"
+                        HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                    <Border Background="{StaticResource ContentBgBrush}"
+                            BorderBrush="{StaticResource WoodBrownBrush}"
+                            BorderThickness="2" CornerRadius="6"
+                            Padding="20,16"
+                            HorizontalAlignment="Center" VerticalAlignment="Center"
+                            MinWidth="360" MaxWidth="440">
+                        <StackPanel>
+                            <TextBlock Text="Convert Profile to Collection"
+                                       FontSize="16" FontWeight="Bold"
+                                       Foreground="{StaticResource WoodBrownBrush}"
+                                       Margin="0,0,0,12"/>
+                            <TextBlock Text="Collection Name" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{StaticResource DarkEarthBrush}" Margin="0,0,0,4"/>
+                            <TextBox Style="{StaticResource StardewTextBox}"
+                                     Text="{Binding ConvertProfileCollectionName, UpdateSourceTrigger=PropertyChanged}"
+                                     FontSize="12" Margin="0,0,0,12"/>
+
+                            <TextBlock Text="Place collection in:" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{StaticResource DarkEarthBrush}" Margin="0,0,0,4"/>
+                            <RadioButton Content="Common (shared across all profiles)"
+                                         IsChecked="{Binding ConvertProfileToCommon}"
+                                         Foreground="{StaticResource DarkEarthBrush}"
+                                         FontSize="12" Margin="0,0,0,4"/>
+                            <RadioButton Content="Inside a specific profile"
+                                         IsChecked="{Binding ConvertProfileToCommon, Converter={StaticResource InverseBool}}"
+                                         Foreground="{StaticResource DarkEarthBrush}"
+                                         FontSize="12" Margin="0,0,0,4"/>
+
+                            <!-- Profile selector (visible when "Inside a specific profile" is selected) -->
+                            <ComboBox ItemsSource="{Binding Profiles}"
+                                      DisplayMemberPath="Name"
+                                      SelectedValuePath="Name"
+                                      SelectedValue="{Binding ConvertProfileTargetProfileName}"
+                                      Visibility="{Binding ConvertProfileToCommon, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"
+                                      FontSize="12" Margin="0,0,0,12"/>
+
+                            <TextBlock Text="All mods will be moved into the new collection. The profile and its save data will be removed."
+                                       FontSize="11" Foreground="{StaticResource SubtleTextBrush}" TextWrapping="Wrap" Margin="0,0,0,16"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <Button Content="Convert"
+                                        Style="{StaticResource StardewButton}"
+                                        Command="{Binding ConfirmConvertProfileToCollectionCommand}"
+                                        Padding="10,5" FontSize="12" Margin="0,0,8,0"/>
+                                <Button Content="Cancel"
+                                        Style="{StaticResource StardewButton}"
+                                        Command="{Binding CancelConvertProfileToCollectionCommand}"
+                                        Padding="10,5" FontSize="12"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </Border>
+
+                <!-- Mod Delete Confirmation Overlay -->
+                <Border Visibility="{Binding IsConfirmingModDelete, Converter={StaticResource BoolToVis}}"
+                        Background="{StaticResource OverlayDimBrush}"
+                        HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                    <Border Background="{StaticResource ContentBgBrush}"
+                            BorderBrush="{StaticResource WoodBrownBrush}"
+                            BorderThickness="2" CornerRadius="6"
+                            Padding="20,16"
+                            HorizontalAlignment="Center" VerticalAlignment="Center"
+                            MaxWidth="400">
+                        <StackPanel>
+                            <TextBlock Text="{Binding ModPendingDelete.Name, StringFormat='Delete &quot;{0}&quot;?'}"
+                                       FontSize="15" FontWeight="Bold"
+                                       Foreground="{StaticResource DarkEarthBrush}"
+                                       TextWrapping="Wrap" Margin="0,0,0,8"/>
+                            <TextBlock Text="This will permanently delete this mod folder and all its contents."
+                                       FontSize="12" Foreground="{StaticResource SubtleTextBrush}"
+                                       TextWrapping="Wrap" Margin="0,0,0,16"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <Button Content="Yes, Delete"
+                                        Style="{StaticResource DeleteButton}"
+                                        Command="{Binding ConfirmDeleteModCommand}"
+                                        Padding="10,5" FontSize="12" Margin="0,0,8,0"/>
+                                <Button Content="Cancel"
+                                        Style="{StaticResource StardewButton}"
+                                        Command="{Binding CancelDeleteModCommand}"
+                                        Padding="10,5" FontSize="12"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </Border>
+
+                <!-- Delete Profile Saves Prompt -->
+                <Border Visibility="{Binding IsPromptingDeleteSaves, Converter={StaticResource BoolToVis}}"
+                        Background="{StaticResource OverlayDimBrush}"
+                        HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                    <Border Background="{StaticResource ContentBgBrush}"
+                            BorderBrush="{StaticResource WoodBrownBrush}"
+                            BorderThickness="2" CornerRadius="6"
+                            Padding="20,16"
+                            HorizontalAlignment="Center" VerticalAlignment="Center"
+                            MaxWidth="440">
+                        <StackPanel>
+                            <TextBlock Text="Profile has save files"
+                                       FontSize="15" FontWeight="Bold"
+                                       Foreground="{StaticResource DarkEarthBrush}"
+                                       Margin="0,0,0,4"/>
+                            <TextBlock Text="This profile has save files associated with it. Deleting them is permanent. You can reassign them to other profiles instead."
+                                       FontSize="12" Foreground="{StaticResource SubtleTextBrush}"
+                                       TextWrapping="Wrap" Margin="0,0,0,16"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <Button Content="Reassign Saves"
+                                        Style="{StaticResource StardewButton}"
+                                        Command="{Binding ReassignDeletedProfileSavesCommand}"
+                                        Visibility="{Binding CanReassignDeletedProfileSaves, Converter={StaticResource BoolToVis}}"
+                                        Padding="10,5" FontSize="12" Margin="0,0,8,0"/>
+                                <Button Content="Delete Saves"
+                                        Style="{StaticResource DeleteButton}"
+                                        Command="{Binding DeleteProfileAndSavesCommand}"
+                                        Padding="10,5" FontSize="12" Margin="0,0,8,0"/>
+                                <Button Content="Cancel"
+                                        Style="{StaticResource StardewButton}"
+                                        Command="{Binding CancelDeleteProfileSavesCommand}"
+                                        Padding="10,5" FontSize="12"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </Border>
+
+                <!-- Config Editor Overlay -->
+                <overlays:ConfigEditorOverlay
+                    Visibility="{Binding IsEditingConfig, Converter={StaticResource BoolToVis}}"/>
+
+                <!-- Changelog Overlay -->
+                <overlays:ChangelogOverlay
+                    Visibility="{Binding IsViewingChangelog, Converter={StaticResource BoolToVis}}"/>
+
+                <!-- Share Mod Dialog Overlay -->
+                <overlays:ShareModDialog
+                    Visibility="{Binding IsShowingShareDialog, Converter={StaticResource BoolToVis}}"/>
+
+                <!-- Shared Mod Update Prompt Overlay -->
+                <Border Visibility="{Binding IsPromptingSharedModUpdate, Converter={StaticResource BoolToVis}}"
+                        Background="{StaticResource OverlayDimBrush}"
+                        HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                    <Border Background="{StaticResource ContentBgBrush}"
+                            BorderBrush="{StaticResource WoodBrownBrush}"
+                            BorderThickness="2" CornerRadius="6"
+                            Padding="20,16"
+                            HorizontalAlignment="Center" VerticalAlignment="Center"
+                            MaxWidth="440">
+                        <StackPanel>
+                            <TextBlock Text="{Binding SharedModUpdatePendingMod.Name, StringFormat='Update &quot;{0}&quot;'}"
+                                       FontSize="15" FontWeight="Bold"
+                                       Foreground="{StaticResource DarkEarthBrush}"
+                                       TextWrapping="Wrap" Margin="0,0,0,4"/>
+                            <TextBlock Text="This mod is shared across profiles. How would you like to update it?"
+                                       FontSize="12" Foreground="{StaticResource SubtleTextBrush}"
+                                       TextWrapping="Wrap" Margin="0,0,0,16"/>
+                            <Button Content="Update for all profiles"
+                                    Style="{StaticResource StardewButton}"
+                                    Command="{Binding ConfirmSharedModUpdateForAllCommand}"
+                                    Padding="10,6" FontSize="12" Margin="0,0,0,6"
+                                    HorizontalAlignment="Stretch"/>
+                            <Button Content="Unshare and update this profile only"
+                                    Style="{StaticResource StardewButton}"
+                                    Command="{Binding UnshareAndUpdateThisProfileCommand}"
+                                    Padding="10,6" FontSize="12" Margin="0,0,0,6"
+                                    HorizontalAlignment="Stretch"/>
+                            <Button Content="Cancel"
+                                    Style="{StaticResource StardewButton}"
+                                    Command="{Binding CancelSharedModUpdateCommand}"
+                                    Padding="10,6" FontSize="12"
+                                    HorizontalAlignment="Right"/>
+                        </StackPanel>
+                    </Border>
+                </Border>
+
+                <!-- Duplicate Detection Results Overlay -->
+                <overlays:DuplicatesDialog
+                    Visibility="{Binding IsShowingDuplicates, Converter={StaticResource BoolToVis}}"/>
+
+                <!-- ===== INITIAL PATH SETUP ===== -->
+                <overlays:SetupWizardOverlay
+                    Visibility="{Binding IsSettingUpPaths, Converter={StaticResource BoolToVis}}"/>
+
+                <!-- ===== FIRST-LOAD DETECTION OVERLAYS ===== -->
+
+                <!-- Welcome / First Profile Prompt -->
+                <overlays:FirstProfileOverlay
+                    Visibility="{Binding IsPromptingFirstProfile, Converter={StaticResource BoolToVis}}"/>
+
+                <!-- Organize Existing Mods Dialog -->
+                <overlays:OrganizeModsOverlay
+                    Visibility="{Binding IsAskingToOrganize, Converter={StaticResource BoolToVis}}"/>
+
+                <!-- Folder Verification Screen -->
+                <overlays:FolderVerificationOverlay
+                    Visibility="{Binding IsVerifyingFolders, Converter={StaticResource BoolToVis}}"/>
+
+                <!-- Save Categorization Screen -->
+                <overlays:SaveCategorizationOverlay
+                    Visibility="{Binding IsCategorizingSaves, Converter={StaticResource BoolToVis}}"/>
+            </Grid>
+        </Grid>
+
+        <!-- ==================== BOTTOM BAR (PLAY + STATUS) ==================== -->
+        <Border Grid.Row="2" Background="{StaticResource WoodBrownBrush}" Padding="16,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0"
+                           Text="{Binding StatusMessage}"
+                           Foreground="{StaticResource ParchmentCreamBrush}"
+                           FontSize="12"
+                           VerticalAlignment="Center"/>
+
+                <Button Grid.Column="1"
+                        Content="PLAY"
+                        Style="{StaticResource PlayButton}"
+                        Command="{Binding PlayCommand}"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

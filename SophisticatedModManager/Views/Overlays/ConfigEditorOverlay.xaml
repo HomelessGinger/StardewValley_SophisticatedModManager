@@ -1,0 +1,65 @@
+<UserControl x:Class="SophisticatedModManager.Views.Overlays.ConfigEditorOverlay"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:SophisticatedModManager.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:MainViewModel}">
+    <Border Visibility="{Binding IsEditingConfig, Converter={StaticResource BoolToVis}}"
+            Background="{StaticResource OverlayDimBrush}"
+            HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+        <Border Background="{StaticResource ContentBgBrush}"
+                BorderBrush="{StaticResource WoodBrownBrush}"
+                BorderThickness="2" CornerRadius="6"
+                Padding="24,20"
+                HorizontalAlignment="Center" VerticalAlignment="Center"
+                MinWidth="500" MaxWidth="650" MaxHeight="550">
+            <DockPanel>
+                <!-- Header -->
+                <Grid DockPanel.Dock="Top" Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding ConfigModName, StringFormat='Config: {0}'}"
+                               FontSize="18" FontWeight="Bold"
+                               Foreground="{StaticResource WoodBrownBrush}"
+                               VerticalAlignment="Center"/>
+                    <Button Grid.Column="1" Content="X"
+                            FontSize="13" FontWeight="Bold"
+                            Style="{StaticResource IconButtonDestructive}"
+                            Command="{Binding CloseConfigEditorCommand}"/>
+                </Grid>
+
+                <TextBlock DockPanel.Dock="Top"
+                           Text="Edit configuration values below. Field names cannot be changed."
+                           FontSize="12" Foreground="{StaticResource SubtleTextBrush}"
+                           TextWrapping="Wrap" Margin="0,0,0,12"/>
+
+                <!-- Footer: Save + Status -->
+                <StackPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="Save"
+                                Style="{StaticResource StardewButton}"
+                                Command="{Binding SaveConfigEditorCommand}"
+                                Padding="14,5" FontSize="12" Margin="0,0,8,0"/>
+                        <Button Content="Cancel"
+                                Style="{StaticResource StardewButton}"
+                                Command="{Binding CloseConfigEditorCommand}"
+                                Padding="14,5" FontSize="12"/>
+                    </StackPanel>
+                    <TextBlock Text="{Binding ConfigSaveStatus}"
+                               FontSize="11" Foreground="{StaticResource LeafGreenBrush}"
+                               Margin="0,6,0,0"/>
+                </StackPanel>
+
+                <!-- Scrollable config entries -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,0,0,0">
+                    <ItemsControl ItemsSource="{Binding ConfigEntries}"
+                                  ItemTemplate="{StaticResource ConfigEntryTemplate}"/>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+    </Border>
+</UserControl>

@@ -1,0 +1,104 @@
+<UserControl x:Class="SophisticatedModManager.Views.Overlays.SetupWizardOverlay"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:SophisticatedModManager.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:MainViewModel}">
+    <Border Background="{StaticResource ContentBgBrush}" Padding="30,20">
+        <StackPanel MaxWidth="500" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <TextBlock Text="Welcome to Sophisticated Mod Manager!"
+                       FontSize="20" FontWeight="Bold"
+                       Foreground="{StaticResource WoodBrownBrush}"
+                       Margin="0,0,0,12"/>
+            <TextBlock Text="Before we get started, let's make sure your paths are correct. These should point to your Stardew Valley installation and saves folder."
+                       FontSize="13" Foreground="{StaticResource SubtleTextBrush}" TextWrapping="Wrap" Margin="0,0,0,20"/>
+
+            <TextBlock Text="Game Folder" FontSize="13" FontWeight="SemiBold"
+                       Foreground="{StaticResource DarkEarthBrush}" Margin="0,0,0,4"/>
+            <TextBlock Text="The folder containing Stardew Valley.exe and the Mods folder."
+                       FontSize="11" Foreground="{StaticResource MutedTextBrush}" Margin="0,0,0,4"/>
+
+            <!-- Scanning indicator -->
+            <TextBlock Text="Scanning for Stardew Valley installations..."
+                       FontSize="11" Foreground="{StaticResource SubtleTextBrush}" FontStyle="Italic"
+                       Margin="0,0,0,8"
+                       Visibility="{Binding IsScanningForGame, Converter={StaticResource BoolToVis}}"/>
+
+            <!-- Detected installations list -->
+            <ItemsControl ItemsSource="{Binding DetectedGamePaths}" Margin="0,0,0,8">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Button Cursor="Hand" Margin="0,2" HorizontalAlignment="Stretch"
+                                Command="{Binding DataContext.SelectDetectedPathCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                CommandParameter="{Binding}">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="border" Background="{StaticResource CardBgBrush}"
+                                            BorderBrush="{StaticResource CardBorderBrush}"
+                                            BorderThickness="1" CornerRadius="4" Padding="8,6">
+                                        <TextBlock Text="{Binding}" FontSize="12"
+                                                   Foreground="{StaticResource DarkEarthBrush}"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="border" Property="BorderBrush"
+                                                    Value="{StaticResource WarmGoldBrush}"/>
+                                            <Setter TargetName="border" Property="Background"
+                                                    Value="{StaticResource ParchmentCreamBrush}"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <Grid Margin="0,0,0,16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBox Grid.Column="0"
+                         Style="{StaticResource StardewTextBox}"
+                         Text="{Binding SetupGamePath, UpdateSourceTrigger=PropertyChanged}"/>
+                <Button Grid.Column="1"
+                        Content="Browse"
+                        Style="{StaticResource StardewButton}"
+                        Command="{Binding BrowseSetupGamePathCommand}"
+                        Margin="8,0,0,0" Padding="12,4"/>
+            </Grid>
+
+            <TextBlock Text="Saves Folder" FontSize="13" FontWeight="SemiBold"
+                       Foreground="{StaticResource DarkEarthBrush}" Margin="0,0,0,4"/>
+            <TextBlock Text="The folder that contains the Saves directory (usually %appdata%\StardewValley)."
+                       FontSize="11" Foreground="{StaticResource MutedTextBrush}" Margin="0,0,0,4"/>
+            <Grid Margin="0,0,0,16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBox Grid.Column="0"
+                         Style="{StaticResource StardewTextBox}"
+                         Text="{Binding SetupSavesPath, UpdateSourceTrigger=PropertyChanged}"/>
+                <Button Grid.Column="1"
+                        Content="Browse"
+                        Style="{StaticResource StardewButton}"
+                        Command="{Binding BrowseSetupSavesPathCommand}"
+                        Margin="8,0,0,0" Padding="12,4"/>
+            </Grid>
+
+            <TextBlock Text="{Binding SetupPathError}"
+                       FontSize="12" Foreground="{StaticResource BarnRedBrush}"
+                       TextWrapping="Wrap"
+                       Margin="0,0,0,8"/>
+
+            <Button Content="Continue"
+                    Style="{StaticResource StardewButton}"
+                    Command="{Binding ConfirmSetupPathsCommand}"
+                    HorizontalAlignment="Left"/>
+        </StackPanel>
+    </Border>
+</UserControl>
