@@ -1,5 +1,6 @@
 using System.IO;
 using System.IO.Compression;
+using System.Security.Cryptography;
 using System.Text.Json;
 using SharpCompress.Archives;
 using SharpCompress.Common;
@@ -189,5 +190,89 @@ public static class FileSystemHelpers
             }
         }
         return null;
+    }
+
+    // --- Collection fingerprinting methods ---
+
+    /// <summary>
+    /// Calculates a fingerprint for a collection by hashing all submod manifests.
+    /// </summary>
+    /// <param name="collectionPath">Path to the collection directory</param>
+    /// <returns>Dictionary mapping submod folder names to their fingerprints</returns>
+    public static Dictionary<string, SubModFingerprint> CalculateCollectionFingerprint(string collectionPath)
+    {
+        var fingerprints = new Dictionary<string, SubModFingerprint>();
+
+        foreach (var subModDir in Directory.GetDirectories(collectionPath))
+        {
+            var manifestPath = Path.Combine(subModDir, "manifest.json");
+            if (!File.Exists(manifestPath)) continue;
+
+            var manifest = ReadManifestBasic(manifestPath);
+            if (manifest == null) continue;
+
+            var hash = CalculateSHA256(manifestPath);
+
+            fingerprints[Path.GetFileName(subModDir)] = new SubModFingerprint
+            {
+                UniqueID = manifest.UniqueID,
+                Version = manifest.Version,
+                ManifestHash = hash
+            };
+        }
+
+        return fingerprints;
+    }
+
+    /// <summary>
+    /// Calculates the SHA256 hash of a file.
+    /// </summary>
+    /// <param name="filePath">Path to the file</param>
+    /// <returns>Base64-encoded SHA256 hash</returns>
+    public static string CalculateSHA256(string filePath)
+    {
+        using var sha = SHA256.Create();
+        using var stream = File.OpenRead(filePath);
+        var hash = sha.ComputeHash(stream);
+        return Convert.ToBase64String(hash);
+    }
+
+    /// <summary>
+    /// Compares two collection fingerprints for identity.
+    /// </summary>
+    /// <param name="a">First fingerprint</param>
+    /// <param name="b">Second fingerprint</param>
+    /// <param name="differences">Output list of differences found</param>
+    /// <returns>True if fingerprints match exactly, false otherwise</returns>
+    public static bool CompareCollectionIdentities(
+        Dictionary<string, SubModFingerprint> a,
+        Dictionary<string, SubModFingerprint> b,
+        out List<string> differences)
+    {
+        differences = new();
+
+        if (a.Count != b.Count)
+        {
+            differences.Add($"SubMod count mismatch: {a.Count} vs {b.Count}");
+            return false;
+        }
+
+        foreach (var (folderName, fpA) in a)
+        {
+            if (!b.TryGetValue(folderName, out var fpB))
+            {
+                differences.Add($"SubMod '{folderName}' missing in second collection");
+                continue;
+            }
+
+            if (fpA.UniqueID != fpB.UniqueID)
+                differences.Add($"{folderName}: Different mod (UniqueID mismatch)");
+            if (fpA.Version != fpB.Version)
+                differences.Add($"{folderName}: Version mismatch ({fpA.Version} vs {fpB.Version})");
+            if (fpA.ManifestHash != fpB.ManifestHash)
+                differences.Add($"{folderName}: Manifest changed");
+        }
+
+        return differences.Count == 0;
     }
 }

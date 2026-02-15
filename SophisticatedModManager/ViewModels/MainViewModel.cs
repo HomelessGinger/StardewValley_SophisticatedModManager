@@ -320,6 +320,12 @@ public partial class MainViewModel : ObservableObject
     private ObservableCollection<DuplicateModGroup> _detectedDuplicates = new();
 
     [ObservableProperty]
+    private bool _isShowingDuplicateCollections;
+
+    [ObservableProperty]
+    private ObservableCollection<DuplicateCollectionGroup> _detectedDuplicateCollections = new();
+
+    [ObservableProperty]
     private bool _isViewingBackups;
 
     [ObservableProperty]

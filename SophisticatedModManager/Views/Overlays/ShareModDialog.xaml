@@ -15,11 +15,14 @@
                 HorizontalAlignment="Center" VerticalAlignment="Center"
                 MaxWidth="420" MinWidth="320">
             <StackPanel>
-                <TextBlock Text="{Binding ModToShare.Name, StringFormat='Share &quot;{0}&quot; across profiles'}"
-                           FontSize="15" FontWeight="Bold"
+                <TextBlock FontSize="15" FontWeight="Bold"
                            Foreground="{StaticResource DarkEarthBrush}"
-                           TextWrapping="Wrap" Margin="0,0,0,4"/>
-                <TextBlock Text="Select which profiles should share this mod. The mod files will be stored once and linked to each profile."
+                           TextWrapping="Wrap" Margin="0,0,0,4">
+                    <Run Text="Share"/>
+                    <Run Text="&quot;"/><Run Text="{Binding ModToShare.Name, Mode=OneWay}"/><Run Text="&quot;"/>
+                    <Run Text="across profiles"/>
+                </TextBlock>
+                <TextBlock Text="Select which profiles should share this item. The files will be stored once and linked to each profile."
                            FontSize="11" Foreground="{StaticResource SubtleTextBrush}"
                            TextWrapping="Wrap" Margin="0,0,0,12"/>
                 <ItemsControl ItemsSource="{Binding ShareTargetProfiles}">

@@ -185,15 +185,30 @@ public partial class MainWindow : Window
             {
                 if (modVm.IsShared)
                 {
-                    var unshareItem = new MenuItem { Header = "Unshare (make private to this profile)" };
-                    unshareItem.Click += (_, _) => vm.UnshareMod(modVm);
+                    var unshareHeader = modVm.IsCollection
+                        ? "Unshare collection (make private to this profile)"
+                        : "Unshare (make private to this profile)";
+                    var unshareItem = new MenuItem { Header = unshareHeader };
+                    if (modVm.IsCollection)
+                        unshareItem.Click += (_, _) => vm.UnshareCollection(modVm);
+                    else
+                        unshareItem.Click += (_, _) => vm.UnshareMod(modVm);
                     menu.Items.Add(unshareItem);
                 }
                 else if (vm.Profiles.Count >= 2)
                 {
-                    var shareItem = new MenuItem { Header = "Share across profiles..." };
-                    shareItem.Click += (_, _) => vm.OpenShareDialog(modVm);
-                    menu.Items.Add(shareItem);
+                    if (modVm.IsCollection)
+                    {
+                        var shareItem = new MenuItem { Header = "Share collection across profiles..." };
+                        shareItem.Click += (_, _) => vm.OpenShareCollectionDialog(modVm);
+                        menu.Items.Add(shareItem);
+                    }
+                    else
+                    {
+                        var shareItem = new MenuItem { Header = "Share across profiles..." };
+                        shareItem.Click += (_, _) => vm.OpenShareDialog(modVm);
+                        menu.Items.Add(shareItem);
+                    }
                 }
             }
         }

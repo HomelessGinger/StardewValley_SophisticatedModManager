@@ -93,23 +93,34 @@ public partial class MainViewModel
 
         if (selectedProfiles.Count < 2)
         {
-            StatusMessage = "Select at least 2 profiles to share a mod.";
+            StatusMessage = ModToShare.IsCollection
+                ? "Select at least 2 profiles to share a collection."
+                : "Select at least 2 profiles to share a mod.";
             return;
         }
 
         try
         {
-            _sharedModService.ShareMod(ModToShare.Model, selectedProfiles, ModsRootPath, _config);
+            if (ModToShare.IsCollection)
+            {
+                _sharedModService.ShareCollection(ModToShare.Model, selectedProfiles, ModsRootPath, _config);
+                StatusMessage = "Collection shared successfully across profiles.";
+            }
+            else
+            {
+                _sharedModService.ShareMod(ModToShare.Model, selectedProfiles, ModsRootPath, _config);
+                StatusMessage = "Mod shared successfully across profiles.";
+            }
+
             _configService.Save(_config);
             IsShowingShareDialog = false;
             ModToShare = null;
             if (SelectedProfile != null)
                 LoadModsForProfile(SelectedProfile.Name);
-            StatusMessage = "Mod shared successfully across profiles.";
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Failed to share mod: {ex.Message}";
+            StatusMessage = $"Failed to share {(ModToShare.IsCollection ? "collection" : "mod")}: {ex.Message}";
         }
     }
 
@@ -360,5 +371,115 @@ public partial class MainViewModel
     private void CloseDuplicates()
     {
         IsShowingDuplicates = false;
+    }
+
+    // ===== Shared Collections Commands =====
+
+    public void OpenShareCollectionDialog(ModEntryViewModel collectionVm)
+    {
+        ModToShare = collectionVm;
+        ShareTargetProfiles.Clear();
+
+        foreach (var profileName in _config.ProfileNames)
+        {
+            var hasCollectionInProfile = false;
+            int subModCount = 0;
+            var actualDir = FileSystemHelpers.FindProfileDir(profileName, ModsRootPath);
+
+            if (actualDir != null)
+            {
+                var cleanName = FolderNameHelper.GetCleanName(collectionVm.Model.FolderName);
+                var collectionPath = Path.Combine(actualDir, cleanName);
+                var collectionPathDisabled = Path.Combine(actualDir, FolderNameHelper.ToDisabled(cleanName));
+
+                if (Directory.Exists(collectionPath) || Directory.Exists(collectionPathDisabled))
+                {
+                    hasCollectionInProfile = true;
+                    var actualPath = Directory.Exists(collectionPath) ? collectionPath : collectionPathDisabled;
+                    subModCount = Directory.GetDirectories(actualPath).Length;
+
+                    try
+                    {
+                        var sourceFingerprint = FileSystemHelpers.CalculateCollectionFingerprint(collectionVm.Model.FolderPath);
+                        var targetFingerprint = FileSystemHelpers.CalculateCollectionFingerprint(actualPath);
+                        var hasIdentityMismatch = !FileSystemHelpers.CompareCollectionIdentities(sourceFingerprint, targetFingerprint, out _);
+
+                        if (hasIdentityMismatch)
+                        {
+                            continue;
+                        }
+                    }
+                    catch
+                    {
+                        continue;
+                    }
+                }
+            }
+
+            if (hasCollectionInProfile)
+            {
+                ShareTargetProfiles.Add(new ShareTargetProfile
+                {
+                    ProfileName = profileName,
+                    IsSelected = true,
+                    CurrentVersion = $"{subModCount} mods",
+                    HasVersionMismatch = false
+                });
+            }
+        }
+
+        IsShowingShareDialog = true;
+    }
+
+    public void UnshareCollection(ModEntryViewModel collectionVm)
+    {
+        if (collectionVm.SharedFolderName == null || SelectedProfile == null) return;
+
+        try
+        {
+            _sharedModService.UnshareCollection(collectionVm.SharedFolderName, SelectedProfile.Name, ModsRootPath, _config);
+            _configService.Save(_config);
+            LoadModsForProfile(SelectedProfile.Name);
+            StatusMessage = $"Unshared collection \"{collectionVm.Name}\" for this profile.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Failed to unshare collection: {ex.Message}";
+        }
+    }
+
+    [RelayCommand]
+    private async Task DetectDuplicateCollections()
+    {
+        try
+        {
+            var duplicates = await _sharedModService.DetectDuplicateCollections(ModsRootPath, _config);
+
+            DetectedDuplicateCollections.Clear();
+            foreach (var group in duplicates)
+            {
+                DetectedDuplicateCollections.Add(group);
+            }
+
+            if (DetectedDuplicateCollections.Count > 0)
+            {
+                IsShowingDuplicateCollections = true;
+                StatusMessage = $"Found {DetectedDuplicateCollections.Count} duplicate collection(s).";
+            }
+            else
+            {
+                StatusMessage = "No duplicate collections found.";
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Failed to detect duplicates: {ex.Message}";
+        }
+    }
+
+    [RelayCommand]
+    private void CloseDuplicateCollections()
+    {
+        IsShowingDuplicateCollections = false;
     }
 }

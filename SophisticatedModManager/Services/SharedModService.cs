@@ -134,6 +134,134 @@ public class SharedModService : ISharedModService
         config.SharedMods[folderName] = info;
     }
 
+    public void ShareCollection(ModEntry collection, List<string> targetProfiles, string modsRoot, AppConfig config)
+    {
+        if (targetProfiles.Count < 2)
+            throw new InvalidOperationException("Must select at least 2 profiles to share a collection.");
+
+        var sharedPoolDir = Path.Combine(modsRoot, ISharedModService.SharedPoolFolderName);
+        if (!Directory.Exists(sharedPoolDir))
+            Directory.CreateDirectory(sharedPoolDir);
+
+        var folderName = FolderNameHelper.GetCleanName(collection.FolderName);
+
+        var sourceFingerprint = FileSystemHelpers.CalculateCollectionFingerprint(collection.FolderPath);
+
+        // Verify all target profiles have identical collection
+        foreach (var profile in targetProfiles)
+        {
+            var profileDir = FileSystemHelpers.FindProfileDir(profile, modsRoot);
+            if (profileDir == null)
+                throw new InvalidOperationException($"Profile '{profile}' directory not found.");
+
+            var profileCollectionPath = Path.Combine(profileDir, collection.FolderName);
+            if (!Directory.Exists(profileCollectionPath))
+                throw new InvalidOperationException($"Collection '{collection.FolderName}' not found in profile '{profile}'.");
+
+            if (IsJunction(profileCollectionPath))
+                throw new InvalidOperationException($"Collection in '{profile}' is already a junction.");
+
+            var targetFingerprint = FileSystemHelpers.CalculateCollectionFingerprint(profileCollectionPath);
+
+            if (!FileSystemHelpers.CompareCollectionIdentities(sourceFingerprint, targetFingerprint, out var diffs))
+            {
+                throw new InvalidOperationException(
+                    $"Collection in '{profile}' differs from source:\n{string.Join("\n", diffs)}");
+            }
+        }
+
+        var sharedCollectionDir = Path.Combine(sharedPoolDir, folderName);
+        if (!Directory.Exists(sharedCollectionDir))
+            Directory.Move(collection.FolderPath, sharedCollectionDir);
+
+        var configsDir = Path.Combine(sharedPoolDir, ISharedModService.ConfigStoreFolderName);
+
+        foreach (var profile in targetProfiles)
+        {
+            var profileDir = FileSystemHelpers.FindProfileDir(profile, modsRoot)!;
+
+            SaveConfigsForCollectionMods(sharedCollectionDir, folderName, profile, profileDir, configsDir);
+
+            var collectionCopyEnabled = Path.Combine(profileDir, FolderNameHelper.ToEnabled(collection.FolderName));
+            var collectionCopyDisabled = Path.Combine(profileDir, FolderNameHelper.ToDisabled(collection.FolderName));
+
+            if (Directory.Exists(collectionCopyEnabled) && !IsJunction(collectionCopyEnabled))
+                Directory.Delete(collectionCopyEnabled, true);
+            if (Directory.Exists(collectionCopyDisabled) && !IsJunction(collectionCopyDisabled))
+                Directory.Delete(collectionCopyDisabled, true);
+
+            var junctionPath = Path.Combine(profileDir, folderName);
+            if (!Directory.Exists(junctionPath))
+                CreateJunction(junctionPath, sharedCollectionDir);
+        }
+
+        if (config.ActiveProfileName != null && targetProfiles.Contains(config.ActiveProfileName, StringComparer.OrdinalIgnoreCase))
+        {
+            RestoreConfigsForCollectionMods(sharedCollectionDir, folderName, config.ActiveProfileName, configsDir);
+        }
+
+        var info = new SharedCollectionInfo
+        {
+            SharedFolderName = folderName,
+            CollectionUniqueID = $"collection:{folderName}",
+            ProfileNames = new List<string>(targetProfiles),
+            SubModFingerprints = sourceFingerprint
+        };
+        config.SharedCollections[folderName] = info;
+    }
+
+    public void UnshareCollection(string sharedFolderName, string profileName, string modsRoot, AppConfig config)
+    {
+        if (!config.SharedCollections.TryGetValue(sharedFolderName, out var info)) return;
+
+        var sharedPoolDir = Path.Combine(modsRoot, ISharedModService.SharedPoolFolderName);
+        var sharedCollectionDir = Path.Combine(sharedPoolDir, sharedFolderName);
+        var profileDir = FileSystemHelpers.FindProfileDir(profileName, modsRoot);
+
+        if (profileDir != null)
+        {
+            var wasDisabled = RemoveJunctionBothStates(profileDir, sharedFolderName);
+
+            if (Directory.Exists(sharedCollectionDir))
+            {
+                var destName = wasDisabled ? FolderNameHelper.ToDisabled(sharedFolderName) : sharedFolderName;
+                var destPath = Path.Combine(profileDir, destName);
+                FileSystemHelpers.CopyDirectory(sharedCollectionDir, destPath);
+
+                var configsDir = Path.Combine(sharedPoolDir, ISharedModService.ConfigStoreFolderName);
+                RestoreConfigsForCollectionMods(destPath, sharedFolderName, profileName, configsDir);
+            }
+
+            var profileConfigDir = Path.Combine(sharedPoolDir, ISharedModService.ConfigStoreFolderName, profileName, sharedFolderName);
+            if (Directory.Exists(profileConfigDir))
+                Directory.Delete(profileConfigDir, true);
+        }
+
+        info.ProfileNames.RemoveAll(n => string.Equals(n, profileName, StringComparison.OrdinalIgnoreCase));
+
+        if (info.ProfileNames.Count <= 1)
+        {
+            if (info.ProfileNames.Count == 1)
+                UnshareCollection(sharedFolderName, info.ProfileNames[0], modsRoot, config);
+
+            if (Directory.Exists(sharedCollectionDir))
+                Directory.Delete(sharedCollectionDir, true);
+
+            var modConfigDir = Path.Combine(sharedPoolDir, ISharedModService.ConfigStoreFolderName);
+            if (Directory.Exists(modConfigDir))
+            {
+                foreach (var profileCfgDir in Directory.GetDirectories(modConfigDir))
+                {
+                    var collectionCfg = Path.Combine(profileCfgDir, sharedFolderName);
+                    if (Directory.Exists(collectionCfg))
+                        Directory.Delete(collectionCfg, true);
+                }
+            }
+
+            config.SharedCollections.Remove(sharedFolderName);
+        }
+    }
+
     public void UnshareMod(string sharedFolderName, string profileName, string modsRoot, AppConfig config)
     {
         if (!config.SharedMods.TryGetValue(sharedFolderName, out var info)) return;
@@ -144,42 +272,34 @@ public class SharedModService : ISharedModService
 
         if (profileDir != null)
         {
-            // Remove the junction
             var wasDisabled = RemoveJunctionBothStates(profileDir, sharedFolderName);
 
-            // Copy mod files from shared pool to profile (full copy, not junction)
             if (Directory.Exists(sharedModDir))
             {
                 var destName = wasDisabled ? FolderNameHelper.ToDisabled(sharedFolderName) : sharedFolderName;
                 var destPath = Path.Combine(profileDir, destName);
                 FileSystemHelpers.CopyDirectory(sharedModDir, destPath);
 
-                // Restore this profile's config
                 var configsDir = Path.Combine(sharedPoolDir, ISharedModService.ConfigStoreFolderName);
                 RestoreConfigsForProfileMod(destPath, sharedFolderName, profileName, configsDir);
             }
 
-            // Clean up profile config store
             var profileConfigDir = Path.Combine(sharedPoolDir, ISharedModService.ConfigStoreFolderName, profileName, sharedFolderName);
             if (Directory.Exists(profileConfigDir))
                 Directory.Delete(profileConfigDir, true);
         }
 
-        // Update tracking
         info.ProfileNames.RemoveAll(n => string.Equals(n, profileName, StringComparison.OrdinalIgnoreCase));
 
         if (info.ProfileNames.Count <= 1)
         {
-            // Only one profile left — unshare completely
             if (info.ProfileNames.Count == 1)
                 UnshareMod(sharedFolderName, info.ProfileNames[0], modsRoot, config);
 
-            // Clean up shared pool entry
             if (Directory.Exists(sharedModDir))
                 Directory.Delete(sharedModDir, true);
 
             var modConfigDir = Path.Combine(sharedPoolDir, ISharedModService.ConfigStoreFolderName);
-            // Clean up any remaining config dirs for this mod across all profiles
             if (Directory.Exists(modConfigDir))
             {
                 foreach (var profileCfgDir in Directory.GetDirectories(modConfigDir))
@@ -245,6 +365,34 @@ public class SharedModService : ISharedModService
                     File.Copy(configPath, Path.Combine(profileConfigDir, "config.json"), true);
             }
         }
+
+        foreach (var (folderName, info) in config.SharedCollections)
+        {
+            if (!info.ProfileNames.Contains(profileName, StringComparer.OrdinalIgnoreCase))
+                continue;
+
+            var sharedCollectionDir = Path.Combine(sharedPoolDir, folderName);
+            if (!Directory.Exists(sharedCollectionDir)) continue;
+
+            var profileConfigDir = Path.Combine(configsDir, profileName, folderName);
+            if (!Directory.Exists(profileConfigDir))
+                Directory.CreateDirectory(profileConfigDir);
+
+            foreach (var subModDir in Directory.GetDirectories(sharedCollectionDir))
+            {
+                var subFolderName = Path.GetFileName(subModDir);
+                if (subFolderName.StartsWith(".")) continue;
+
+                var configPath = Path.Combine(subModDir, "config.json");
+                if (File.Exists(configPath))
+                {
+                    var destDir = Path.Combine(profileConfigDir, subFolderName);
+                    if (!Directory.Exists(destDir))
+                        Directory.CreateDirectory(destDir);
+                    File.Copy(configPath, Path.Combine(destDir, "config.json"), true);
+                }
+            }
+        }
     }
 
     public void RestoreSharedModConfigs(string profileName, string modsRoot, AppConfig config)
@@ -283,6 +431,29 @@ public class SharedModService : ISharedModService
                     File.Copy(configSrc, Path.Combine(sharedModDir, "config.json"), true);
             }
         }
+
+        foreach (var (folderName, info) in config.SharedCollections)
+        {
+            if (!info.ProfileNames.Contains(profileName, StringComparer.OrdinalIgnoreCase))
+                continue;
+
+            var sharedCollectionDir = Path.Combine(sharedPoolDir, folderName);
+            if (!Directory.Exists(sharedCollectionDir)) continue;
+
+            var profileConfigDir = Path.Combine(configsDir, profileName, folderName);
+            if (!Directory.Exists(profileConfigDir)) continue;
+
+            foreach (var subConfigDir in Directory.GetDirectories(profileConfigDir))
+            {
+                var subFolderName = Path.GetFileName(subConfigDir);
+                var configSrc = Path.Combine(subConfigDir, "config.json");
+                if (File.Exists(configSrc))
+                {
+                    var destPath = Path.Combine(sharedCollectionDir, subFolderName, "config.json");
+                    File.Copy(configSrc, destPath, true);
+                }
+            }
+        }
     }
 
     public Dictionary<string, List<(string ProfileName, ModEntry Mod)>> DetectDuplicateMods(
@@ -298,7 +469,6 @@ public class SharedModService : ISharedModService
 
             foreach (var dir in Directory.GetDirectories(profileDir))
             {
-                // Skip junctions (already shared)
                 if (IsJunction(dir)) continue;
 
                 var folderName = Path.GetFileName(dir);
@@ -318,7 +488,6 @@ public class SharedModService : ISharedModService
             }
         }
 
-        // Filter to only duplicates (2+ profiles)
         var duplicates = new Dictionary<string, List<(string ProfileName, ModEntry Mod)>>(
             StringComparer.OrdinalIgnoreCase);
 
@@ -326,6 +495,62 @@ public class SharedModService : ISharedModService
         {
             if (entries.Count >= 2)
                 duplicates[uid] = entries;
+        }
+
+        return duplicates;
+    }
+
+    public async Task<List<DuplicateCollectionGroup>> DetectDuplicateCollections(string modsRoot, AppConfig config)
+    {
+        var collectionsByName = new Dictionary<string, List<(string profile, string path, Dictionary<string, SubModFingerprint> fingerprint)>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var profileName in config.ProfileNames)
+        {
+            var profileDir = FileSystemHelpers.FindProfileDir(profileName, modsRoot);
+            if (profileDir == null) continue;
+
+            if (config.ProfileCollectionNames.TryGetValue(profileName, out var collectionNames))
+            {
+                foreach (var collectionName in collectionNames)
+                {
+                    var collectionPath = Path.Combine(profileDir, collectionName);
+                    if (!Directory.Exists(collectionPath)) continue;
+
+                    if (IsJunction(collectionPath))
+                        continue;
+
+                    if (Path.GetFileName(collectionPath).StartsWith("."))
+                        continue;
+
+                    var fingerprint = await Task.Run(() => FileSystemHelpers.CalculateCollectionFingerprint(collectionPath));
+
+                    if (!collectionsByName.ContainsKey(collectionName))
+                        collectionsByName[collectionName] = new();
+
+                    collectionsByName[collectionName].Add((profileName, collectionPath, fingerprint));
+                }
+            }
+        }
+
+        var duplicates = new List<DuplicateCollectionGroup>();
+
+        foreach (var (name, instances) in collectionsByName.Where(x => x.Value.Count > 1))
+        {
+            var firstFingerprint = instances[0].fingerprint;
+            var hasIdentityMismatch = instances.Skip(1).Any(x =>
+                !FileSystemHelpers.CompareCollectionIdentities(firstFingerprint, x.fingerprint, out _));
+
+            duplicates.Add(new DuplicateCollectionGroup
+            {
+                CollectionName = name,
+                HasIdentityMismatch = hasIdentityMismatch,
+                Instances = new System.Collections.ObjectModel.ObservableCollection<DuplicateCollectionInstance>(
+                    instances.Select(x => new DuplicateCollectionInstance
+                    {
+                        ProfileName = x.profile,
+                        SubModCount = x.fingerprint.Count
+                    }))
+            });
         }
 
         return duplicates;
@@ -346,7 +571,6 @@ public class SharedModService : ISharedModService
                 continue;
             }
 
-            // Check that junctions still point to the right target
             foreach (var profileName in info.ProfileNames)
             {
                 var profileDir = FileSystemHelpers.FindProfileDir(profileName, modsRoot);
@@ -367,6 +591,27 @@ public class SharedModService : ISharedModService
         return brokenEntries.Distinct().ToList();
     }
 
+    public List<string> ValidateSharedCollections(string modsRoot, AppConfig config)
+    {
+        var changedCollections = new List<string>();
+        var sharedPoolDir = Path.Combine(modsRoot, ISharedModService.SharedPoolFolderName);
+
+        foreach (var (folderName, info) in config.SharedCollections)
+        {
+            var sharedCollectionDir = Path.Combine(sharedPoolDir, folderName);
+            if (!Directory.Exists(sharedCollectionDir)) continue;
+
+            var currentFingerprint = FileSystemHelpers.CalculateCollectionFingerprint(sharedCollectionDir);
+
+            if (!FileSystemHelpers.CompareCollectionIdentities(info.SubModFingerprints, currentFingerprint, out _))
+            {
+                changedCollections.Add(folderName);
+            }
+        }
+
+        return changedCollections;
+    }
+
     public void RepairBrokenSharedMod(string sharedFolderName, string modsRoot, AppConfig config)
     {
         if (!config.SharedMods.TryGetValue(sharedFolderName, out var info)) return;
@@ -376,12 +621,10 @@ public class SharedModService : ISharedModService
 
         if (!Directory.Exists(sharedModDir))
         {
-            // Shared pool entry is gone — remove tracking
             config.SharedMods.Remove(sharedFolderName);
             return;
         }
 
-        // Re-create missing junctions
         foreach (var profileName in info.ProfileNames.ToList())
         {
             var profileDir = FileSystemHelpers.FindProfileDir(profileName, modsRoot);
@@ -420,7 +663,6 @@ public class SharedModService : ISharedModService
             var profileDir = FileSystemHelpers.FindProfileDir(profileName, modsRoot);
             if (profileDir != null)
             {
-                // Remove junctions
                 var junctionEnabled = Path.Combine(profileDir, folderName);
                 var junctionDisabled = Path.Combine(profileDir, FolderNameHelper.ToDisabled(folderName));
 
@@ -430,16 +672,13 @@ public class SharedModService : ISharedModService
                     RemoveJunction(junctionDisabled);
             }
 
-            // Update tracking
             var info = config.SharedMods[folderName];
             info.ProfileNames.RemoveAll(n => string.Equals(n, profileName, StringComparison.OrdinalIgnoreCase));
 
-            // Clean up profile config store
             var profileConfigDir = Path.Combine(sharedPoolDir, ISharedModService.ConfigStoreFolderName, profileName);
             if (Directory.Exists(profileConfigDir))
                 Directory.Delete(profileConfigDir, true);
 
-            // If only one profile left, unshare completely
             if (info.ProfileNames.Count <= 1)
             {
                 if (info.ProfileNames.Count == 1)
@@ -458,14 +697,12 @@ public class SharedModService : ISharedModService
                             if (!Directory.Exists(destPath))
                                 FileSystemHelpers.CopyDirectory(sharedModDir, destPath);
 
-                            // Restore config for last profile
                             var configsDir = Path.Combine(sharedPoolDir, ISharedModService.ConfigStoreFolderName);
                             RestoreConfigsForProfileMod(destPath, folderName, lastProfile, configsDir);
 
                             Directory.Delete(sharedModDir, true);
                         }
 
-                        // Clean up last profile's config store
                         var lastConfigDir = Path.Combine(sharedPoolDir, ISharedModService.ConfigStoreFolderName, lastProfile, folderName);
                         if (Directory.Exists(lastConfigDir))
                             Directory.Delete(lastConfigDir, true);
@@ -482,13 +719,11 @@ public class SharedModService : ISharedModService
         var sharedPoolDir = Path.Combine(modsRoot, ISharedModService.SharedPoolFolderName);
         var configsDir = Path.Combine(sharedPoolDir, ISharedModService.ConfigStoreFolderName);
 
-        // Rename .configs/{old}/ to .configs/{new}/
         var oldConfigDir = Path.Combine(configsDir, oldName);
         var newConfigDir = Path.Combine(configsDir, newName);
         if (Directory.Exists(oldConfigDir) && !Directory.Exists(newConfigDir))
             Directory.Move(oldConfigDir, newConfigDir);
 
-        // Update ProfileNames in SharedModInfo
         foreach (var (_, info) in config.SharedMods)
         {
             var idx = info.ProfileNames.FindIndex(n =>
@@ -531,7 +766,6 @@ public class SharedModService : ISharedModService
         if (!Directory.Exists(profileConfigDir))
             Directory.CreateDirectory(profileConfigDir);
 
-        // Find the actual mod copy in the profile
         var modPathEnabled = Path.Combine(profileDir, cleanName);
         var modPathDisabled = Path.Combine(profileDir, FolderNameHelper.ToDisabled(cleanName));
         var actualModPath = Directory.Exists(modPathEnabled) ? modPathEnabled :
@@ -585,6 +819,53 @@ public class SharedModService : ISharedModService
             {
                 var destPath = Path.Combine(targetModDir, subName, "config.json");
                 if (Directory.Exists(Path.Combine(targetModDir, subName)))
+                    File.Copy(configSrc, destPath, true);
+            }
+        }
+    }
+
+    private void SaveConfigsForCollectionMods(string sharedCollectionDir, string collectionName,
+        string profileName, string profileDir, string configsDir)
+    {
+        var profileConfigDir = Path.Combine(configsDir, profileName, collectionName);
+        if (!Directory.Exists(profileConfigDir))
+            Directory.CreateDirectory(profileConfigDir);
+
+        var collectionPathEnabled = Path.Combine(profileDir, collectionName);
+        var collectionPathDisabled = Path.Combine(profileDir, FolderNameHelper.ToDisabled(collectionName));
+        var actualCollectionPath = Directory.Exists(collectionPathEnabled) ? collectionPathEnabled :
+            Directory.Exists(collectionPathDisabled) ? collectionPathDisabled : null;
+
+        if (actualCollectionPath == null || IsJunction(actualCollectionPath)) return;
+
+        foreach (var subDir in Directory.GetDirectories(actualCollectionPath))
+        {
+            var subName = Path.GetFileName(subDir);
+            var configPath = Path.Combine(subDir, "config.json");
+            if (File.Exists(configPath))
+            {
+                var destDir = Path.Combine(profileConfigDir, subName);
+                if (!Directory.Exists(destDir))
+                    Directory.CreateDirectory(destDir);
+                File.Copy(configPath, Path.Combine(destDir, "config.json"), true);
+            }
+        }
+    }
+
+    private static void RestoreConfigsForCollectionMods(string sharedCollectionDir, string collectionName,
+        string profileName, string configsDir)
+    {
+        var profileConfigDir = Path.Combine(configsDir, profileName, collectionName);
+        if (!Directory.Exists(profileConfigDir)) return;
+
+        foreach (var subConfigDir in Directory.GetDirectories(profileConfigDir))
+        {
+            var subName = Path.GetFileName(subConfigDir);
+            var configSrc = Path.Combine(subConfigDir, "config.json");
+            if (File.Exists(configSrc))
+            {
+                var destPath = Path.Combine(sharedCollectionDir, subName, "config.json");
+                if (Directory.Exists(Path.Combine(sharedCollectionDir, subName)))
                     File.Copy(configSrc, destPath, true);
             }
         }

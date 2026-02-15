@@ -7,7 +7,8 @@
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=vm:MainViewModel}">
     <Border Background="{StaticResource ContentBgBrush}" Padding="30,20">
-        <StackPanel MaxWidth="500" HorizontalAlignment="Left">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel MaxWidth="500" HorizontalAlignment="Left">
             <TextBlock Text="Settings"
                        FontSize="20" FontWeight="Bold"
                        Foreground="{StaticResource WoodBrownBrush}"
@@ -127,6 +128,7 @@
                         Command="{Binding OpenConfigFolderCommand}"
                         Margin="8,0,0,0"/>
             </StackPanel>
-        </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
     </Border>
 </UserControl>

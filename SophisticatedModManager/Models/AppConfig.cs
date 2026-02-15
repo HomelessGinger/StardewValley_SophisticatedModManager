@@ -30,5 +30,7 @@ public class AppConfig
 
     public Dictionary<string, SharedModInfo> SharedMods { get; set; } = new();
 
+    public Dictionary<string, SharedCollectionInfo> SharedCollections { get; set; } = new();
+
     public int MaxSaveBackups { get; set; } = 1;
 }

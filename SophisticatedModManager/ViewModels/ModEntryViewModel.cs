@@ -72,6 +72,8 @@ public partial class ModEntryViewModel : ObservableObject
 
     public bool CanEndorse => NexusModId != null;
 
+    public bool CanShare => IsCollection && !IsCommon && !IsShared;
+
     public ModEntryViewModel(ModEntry model, IModService modService, IModConfigService modConfigService)
     {
         _model = model;

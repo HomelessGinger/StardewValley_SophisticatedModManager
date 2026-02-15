@@ -50,6 +50,22 @@ public class DuplicateModInstance
     public string Version { get; set; } = string.Empty;
 }
 
+public partial class DuplicateCollectionGroup : ObservableObject
+{
+    [ObservableProperty]
+    private bool _isSelected = true;
+
+    public string CollectionName { get; set; } = string.Empty;
+    public bool HasIdentityMismatch { get; set; }
+    public ObservableCollection<DuplicateCollectionInstance> Instances { get; set; } = new();
+}
+
+public class DuplicateCollectionInstance
+{
+    public string ProfileName { get; set; } = string.Empty;
+    public int SubModCount { get; set; }
+}
+
 // ==================== MOD OPERATIONS ====================
 
 public record MoveModRequest(ModEntryViewModel Mod, string TargetType, string? TargetProfileName);
