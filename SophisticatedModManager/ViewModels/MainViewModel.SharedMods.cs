@@ -232,10 +232,11 @@ public partial class MainViewModel
     }
 
     [RelayCommand]
-    private void DetectDuplicates()
+    private async Task DetectDuplicates()
     {
         try
         {
+            // Detect duplicate mods
             var duplicates = _sharedModService.DetectDuplicateMods(
                 _config.ProfileNames, ModsRootPath, _config);
 
@@ -259,10 +260,40 @@ public partial class MainViewModel
                 DetectedDuplicates.Add(group);
             }
 
-            IsShowingDuplicates = true;
+            // Detect duplicate collections
+            var duplicateCollections = await _sharedModService.DetectDuplicateCollections(ModsRootPath, _config);
 
-            if (DetectedDuplicates.Count == 0)
-                StatusMessage = "No duplicate mods found.";
+            DetectedDuplicateCollections.Clear();
+            foreach (var group in duplicateCollections)
+            {
+                DetectedDuplicateCollections.Add(group);
+            }
+
+            // Show appropriate dialogs
+            if (DetectedDuplicates.Count > 0)
+            {
+                IsShowingDuplicates = true;
+            }
+
+            if (DetectedDuplicateCollections.Count > 0)
+            {
+                IsShowingDuplicateCollections = true;
+            }
+
+            // Status message
+            if (DetectedDuplicates.Count == 0 && DetectedDuplicateCollections.Count == 0)
+            {
+                StatusMessage = "No duplicate mods or collections found.";
+            }
+            else
+            {
+                var parts = new List<string>();
+                if (DetectedDuplicates.Count > 0)
+                    parts.Add($"{DetectedDuplicates.Count} duplicate mod(s)");
+                if (DetectedDuplicateCollections.Count > 0)
+                    parts.Add($"{DetectedDuplicateCollections.Count} duplicate collection(s)");
+                StatusMessage = $"Found {string.Join(" and ", parts)}.";
+            }
         }
         catch (Exception ex)
         {
@@ -371,6 +402,108 @@ public partial class MainViewModel
     private void CloseDuplicates()
     {
         IsShowingDuplicates = false;
+    }
+
+    [RelayCommand]
+    private void ShareSelectedDuplicateCollections()
+    {
+        var selected = DetectedDuplicateCollections.Where(g => g.IsSelected).ToList();
+        if (selected.Count == 0)
+        {
+            StatusMessage = "No collections selected to share.";
+            return;
+        }
+
+        int sharedCount = 0;
+        int skippedCount = 0;
+        var skippedCollections = new List<string>();
+
+        foreach (var group in selected)
+        {
+            // Skip collections with identity mismatches to avoid conflicts
+            if (group.HasIdentityMismatch)
+            {
+                skippedCount++;
+                skippedCollections.Add($"{group.CollectionName} (content mismatch)");
+                continue;
+            }
+
+            try
+            {
+                // Get the profiles that have this collection
+                var profilesWithCollection = group.Instances.Select(i => i.ProfileName).ToList();
+
+                // Find the collection entry from the first profile
+                var firstProfile = profilesWithCollection[0];
+                var collectionEntry = FindCollectionEntryByName(group.CollectionName, firstProfile);
+
+                if (collectionEntry == null)
+                {
+                    skippedCount++;
+                    skippedCollections.Add($"{group.CollectionName} (source not found)");
+                    continue;
+                }
+
+                // Share it across all profiles that have it
+                _sharedModService.ShareCollection(collectionEntry, profilesWithCollection, ModsRootPath, _config);
+                _configService.Save(_config);
+
+                sharedCount++;
+            }
+            catch (Exception ex)
+            {
+                skippedCount++;
+                skippedCollections.Add($"{group.CollectionName} ({ex.Message})");
+            }
+        }
+
+        // Refresh the mods for the current profile
+        if (SelectedProfile != null)
+            LoadModsForProfile(SelectedProfile.Name);
+
+        // Show summary
+        var summary = $"Shared {sharedCount} collection(s) across profiles.";
+        if (skippedCount > 0)
+        {
+            summary += $"\n\nSkipped {skippedCount} collection(s):";
+            foreach (var collection in skippedCollections)
+                summary += $"\n• {collection}";
+        }
+
+        StatusMessage = summary.Replace("\n", " ");
+        IsShowingDuplicateCollections = false;
+
+        // Show detailed summary in a message box for user reference
+        System.Windows.MessageBox.Show(summary, "Share Duplicate Collections Complete",
+            System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+    }
+
+    private ModEntry? FindCollectionEntryByName(string collectionName, string profileName)
+    {
+        var profileDir = FileSystemHelpers.FindProfileDir(profileName, ModsRootPath);
+        if (profileDir == null)
+            return null;
+
+        var collectionPath = Path.Combine(profileDir, collectionName);
+        if (!Directory.Exists(collectionPath))
+        {
+            // Try disabled version
+            collectionPath = Path.Combine(profileDir, FolderNameHelper.ToDisabled(collectionName));
+            if (!Directory.Exists(collectionPath))
+                return null;
+        }
+
+        // Create a ModEntry for this collection
+        var entry = new ModEntry
+        {
+            FolderPath = collectionPath,
+            FolderName = Path.GetFileName(collectionPath),
+            Name = collectionName,
+            IsCollection = true,
+            UniqueID = $"collection:{collectionName}"
+        };
+
+        return entry;
     }
 
     // ===== Shared Collections Commands =====

@@ -1359,6 +1359,10 @@
                 <overlays:DuplicatesDialog
                     Visibility="{Binding IsShowingDuplicates, Converter={StaticResource BoolToVis}}"/>
 
+                <!-- Duplicate Collections Detection Results Overlay -->
+                <overlays:DuplicateCollectionsDialog
+                    Visibility="{Binding IsShowingDuplicateCollections, Converter={StaticResource BoolToVis}}"/>
+
                 <!-- ===== INITIAL PATH SETUP ===== -->
                 <overlays:SetupWizardOverlay
                     Visibility="{Binding IsSettingUpPaths, Converter={StaticResource BoolToVis}}"/>

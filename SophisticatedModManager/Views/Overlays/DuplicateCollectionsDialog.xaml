@@ -1,0 +1,87 @@
+<UserControl x:Class="SophisticatedModManager.Views.Overlays.DuplicateCollectionsDialog"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:SophisticatedModManager.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:MainViewModel}">
+    <Border Visibility="{Binding IsShowingDuplicateCollections, Converter={StaticResource BoolToVis}}"
+            Background="{StaticResource OverlayDimBrush}"
+            HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+        <Border Background="{StaticResource ContentBgBrush}"
+                BorderBrush="{StaticResource WoodBrownBrush}"
+                BorderThickness="2" CornerRadius="6"
+                Padding="20,16"
+                HorizontalAlignment="Center" VerticalAlignment="Center"
+                MaxWidth="500" MaxHeight="450">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Top"
+                           Text="Duplicate Collections Detected"
+                           FontSize="16" FontWeight="Bold"
+                           Foreground="{StaticResource DarkEarthBrush}"
+                           Margin="0,0,0,4"/>
+                <TextBlock DockPanel.Dock="Top"
+                           Text="These collections exist in multiple profiles. Select which ones to share across profiles to save disk space."
+                           FontSize="11" Foreground="{StaticResource SubtleTextBrush}"
+                           TextWrapping="Wrap" Margin="0,0,0,8"/>
+                <TextBlock DockPanel.Dock="Top"
+                           Text="Note: Collections with content mismatches will be skipped automatically."
+                           FontSize="10" Foreground="{StaticResource MutedTextBrush}" FontStyle="Italic"
+                           TextWrapping="Wrap" Margin="0,0,0,12"/>
+                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal"
+                            HorizontalAlignment="Right" Margin="0,10,0,0">
+                    <Button Content="Share Selected"
+                            Style="{StaticResource StardewButton}"
+                            Command="{Binding ShareSelectedDuplicateCollectionsCommand}"
+                            Padding="14,5" FontSize="12"
+                            Margin="0,0,8,0"/>
+                    <Button Content="Cancel"
+                            Style="{StaticResource StardewButton}"
+                            Command="{Binding CloseDuplicateCollectionsCommand}"
+                            Padding="14,5" FontSize="12"/>
+                </StackPanel>
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ItemsControl ItemsSource="{Binding DetectedDuplicateCollections}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="{StaticResource CardBgBrush}"
+                                        BorderBrush="{StaticResource CardBorderBrush}"
+                                        BorderThickness="1" CornerRadius="4"
+                                        Padding="10,8" Margin="0,0,0,6">
+                                    <StackPanel Orientation="Horizontal">
+                                        <CheckBox IsChecked="{Binding IsSelected}"
+                                                  Style="{StaticResource StardewCheckBox}"
+                                                  VerticalAlignment="Top" Margin="0,2,10,0"/>
+                                        <StackPanel>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding CollectionName}"
+                                                           FontWeight="SemiBold" FontSize="13"
+                                                           Foreground="{StaticResource DarkEarthBrush}"/>
+                                                <TextBlock Text="&#x26A0; content mismatch (will skip)"
+                                                           FontSize="10" Foreground="{StaticResource WarningOrangeBrush}"
+                                                           VerticalAlignment="Center" Margin="8,0,0,0"
+                                                           Visibility="{Binding HasIdentityMismatch, Converter={StaticResource BoolToVis}}"/>
+                                            </StackPanel>
+                                            <ItemsControl ItemsSource="{Binding Instances}" Margin="8,4,0,0">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock FontSize="11" Foreground="{StaticResource SubtleTextBrush}">
+                                                            <Run Text="{Binding ProfileName, Mode=OneWay}"/>
+                                                            <Run Text=" &#x2014; "/>
+                                                            <Run Text="{Binding SubModCount, Mode=OneWay, StringFormat='{}{0} mods'}"/>
+                                                        </TextBlock>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+    </Border>
+</UserControl>
