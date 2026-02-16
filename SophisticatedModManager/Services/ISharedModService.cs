@@ -1,4 +1,5 @@
 using SophisticatedModManager.Models;
+using SophisticatedModManager.ViewModels;
 
 namespace SophisticatedModManager.Services;
 

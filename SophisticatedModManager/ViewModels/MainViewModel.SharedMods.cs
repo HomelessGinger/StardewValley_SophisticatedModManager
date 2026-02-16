@@ -120,7 +120,7 @@ public partial class MainViewModel
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Failed to share {(ModToShare.IsCollection ? "collection" : "mod")}: {ex.Message}";
+            StatusMessage = $"Failed to share {(ModToShare?.IsCollection == true ? "collection" : "mod")}: {ex.Message}";
         }
     }
 

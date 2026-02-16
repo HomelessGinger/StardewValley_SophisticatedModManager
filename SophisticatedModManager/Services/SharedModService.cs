@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using SophisticatedModManager.Models;
+using SophisticatedModManager.ViewModels;
 
 namespace SophisticatedModManager.Services;
 
